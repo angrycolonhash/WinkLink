@@ -23,6 +23,7 @@ ProgressBar::ProgressBar(TFT_eSPI &tft, int x, int y, int width, int height, uin
     this->width = width;
     this->x = x;
     this->y = y;
+    delay(1000);
 }
 
 void ProgressBar::update(uint8_t progress) {

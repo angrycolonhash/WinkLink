@@ -5,10 +5,17 @@
 #include <ArduinoNvs.h>
 #include <deviceinfo.hpp>
 #include "drawing.hpp"
+#include "dapup.hpp"
+
+#define BUTTON_PIN_1 21
+#define BUTTON_PIN_2 25
 
 TFT_eSPI tft = TFT_eSPI();
 DeviceInfo device = DeviceInfo();
 bool needToSetup = false;
+
+int lastState = HIGH;
+int currentState;
 
 void tft_boot_logo();
 void drawProgressBar(TFT_eSPI &tft, int x, int y, int width, int height, uint8_t progress, uint16_t borderColor, uint16_t barColor, uint16_t bgColor);
@@ -20,18 +27,61 @@ void setup() {
   Serial.println("Starting WinkLink");
 
   // Initialises NVS for serial information
-  NVS.begin();
-
   tft.begin();
-  tft.fillScreen(TFT_BLACK);
 
+  tft.fillScreen(TFT_BLACK);
+  // Initialise all boot graphics + security
   tft_boot_logo();
+
+  // Here is where the real fun begins, mwehehe
   tft.fillScreen(TFT_BLACK);
   tft.println("Everything works fine :)");
 }
 
 void loop() {
 
+}
+
+void boot_bar() {
+  int barWidth = tft.width() * 0.7;  // 70% of screen width
+  int barHeight = 15;
+  int barX = (tft.width() - barWidth) / 2;
+  int barY = tft.height() - 20;
+
+  ProgressBar boot_bar = ProgressBar(tft, barX, barY, barWidth, barHeight, TFT_BLACK, TFT_WHITE, TFT_BLACK);
+  
+  // All boot requirements code: 
+  // ---------------------------
+  NVS.begin();
+  boot_bar.update(20);
+
+  needToSetup = device.read(tft);
+  boot_bar.update(40);
+
+  setupWifi();
+  boot_bar.update(60);
+
+  // WiFi.begin("________", "________");
+  // boot_bar.update(80);
+  // int counter = 0;
+  // while (WiFi.status() != WL_CONNECTED) {
+  //   delay(500);
+  //   Serial.print(".");
+  //   counter+=1;
+  //   if (counter > 10) {
+  //     Serial.print("Unable to connect to network for time sync");
+  //     break;
+  //   }
+  // }
+  // if (counter <= 10) {
+  //   Serial.println("WiFi connected");
+  // }
+
+  pinMode(BUTTON_PIN_1, INPUT_PULLUP);
+  boot_bar.update(80);
+  
+  boot_bar.update(100);
+  // ---------------------------
 }
 
 void tft_boot_logo() {
@@ -73,14 +123,6 @@ void tft_boot_logo() {
   tft.drawString("#", centerX + 24, centerY);
   delay(800);
 
-  // Final logo
-  tft.fillScreen(TFT_BLACK);
-  tft.drawString(">", centerX - 18, centerY);
-  tft.fillCircle(colonX - 8, centerY - dotSpacing/2, dotRadius, TFT_WHITE);
-  tft.fillCircle(colonX - 8, centerY + dotSpacing/2, dotRadius, TFT_WHITE);
-  tft.drawString("#", centerX + 24, centerY);
-  delay(800);
-
   // Winky face with bigger eyes
   tft.fillScreen(TFT_BLACK);
   tft.setTextSize(4);  // Increased from 3 to 4 for bigger eyes
@@ -94,18 +136,7 @@ void tft_boot_logo() {
   tft.setTextColor(TFT_WHITE);
   tft.drawString("WinkLink", centerX, centerY+40);  // Adjusted position down to accommodate larger emoticon
 
-  int barWidth = tft.width() * 0.7;  // 70% of screen width
-  int barHeight = 20;
-  int barX = (tft.width() - barWidth) / 2;
-  int barY = tft.height() - 20;
-
-  ProgressBar boot_bar = ProgressBar(tft, barX, barY, barWidth, barHeight, TFT_WHITE, TFT_WHITE, TFT_BLACK);
-
-  // All boot requirements code: 
-  // ---------------------------
-  needToSetup = device.read(tft);
-  boot_bar.update(100);
-  // ---------------------------
+  boot_bar();
 
   delay(2000);
 }

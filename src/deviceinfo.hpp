@@ -1,12 +1,17 @@
+#ifndef DEVICEINFO_HPP
+#define DEVICEINFO_HPP
+
 #include <Arduino.h>
 #include <ArduinoNvs.h>
 #include <TFT_eSPI.h>
 
 class DeviceInfo {
-    String serial_num;
-    String device_name;
-    String device_owner;
-    bool needToSetup;
+    public:
+        String serial_num;
+        String device_name;
+        String device_owner;
+    private:
+        bool needToSetup;
 
     public:
         DeviceInfo() {}
@@ -64,7 +69,7 @@ class DeviceInfo {
             Serial.printf("Need to setup: %s", needToSetup ? "true" : "false");
             return needToSetup;
         }
-        
+
         void first_time_flash() {
             NVS.setString("serial_num", "WINK00000001");
             NVS.setString("device_owner", "tk");
@@ -72,3 +77,4 @@ class DeviceInfo {
             Serial.println("Successfully added in test data");
         }
 };
+#endif // DEVICEINFO_HPP
