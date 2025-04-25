@@ -6,6 +6,7 @@
 #include <deviceinfo.hpp>
 #include "drawing.hpp"
 #include "dapup.hpp"
+#include "ezButton.h"
 
 #define BUTTON_PIN_1 21
 #define BUTTON_PIN_2 25
@@ -13,6 +14,8 @@
 TFT_eSPI tft = TFT_eSPI();
 DeviceInfo device = DeviceInfo();
 bool needToSetup = false;
+ezButton button1(BUTTON_PIN_1);
+ezButton button2(BUTTON_PIN_2);
 
 int lastState = HIGH;
 int currentState;
@@ -35,11 +38,43 @@ void setup() {
 
   // Here is where the real fun begins, mwehehe
   tft.fillScreen(TFT_BLACK);
-  tft.println("Everything works fine :)");
 }
 
 void loop() {
+  button1.loop();
+  button2.loop();
+  
+  // Center coordinates
+  int centerX = tft.width() / 2;
+  int centerY = tft.height() / 2;
 
+  // Handle Button 1
+  if (button1.isPressed()) {
+    // Fill rectangle - properly centered
+    tft.fillScreen(TFT_BLACK); // Clear previous shapes
+    tft.fillRect(centerX - 60, centerY - 60, 120, 120, TFT_RED);
+  }
+
+  if (button1.isReleased()) {
+    // Fill circle
+    tft.fillScreen(TFT_BLACK); // Clear previous shapes
+    tft.fillCircle(centerX, centerY, 60, TFT_RED);
+  }
+
+  // Handle Button 2
+  if (button2.isPressed()) {
+    // Fill rectangle - properly centered
+    tft.fillScreen(TFT_BLACK); // Clear previous shapes
+    tft.fillRect(centerX - 60, centerY - 60, 120, 120, TFT_BLUE);
+  }
+
+  if (button2.isReleased()) {
+    // Fill circle
+    tft.fillScreen(TFT_BLACK); // Clear previous shapes
+    tft.fillCircle(centerX, centerY, 60, TFT_BLUE);
+  }
+  
+  delay(10); // Small delay to prevent CPU hogging
 }
 
 void boot_bar() {
@@ -77,7 +112,8 @@ void boot_bar() {
   //   Serial.println("WiFi connected");
   // }
 
-  pinMode(BUTTON_PIN_1, INPUT_PULLUP);
+  button1.setDebounceTime(100);
+  button2.setDebounceTime(100);
   boot_bar.update(80);
   
   boot_bar.update(100);
