@@ -7,18 +7,20 @@
 #include "drawing.hpp"
 #include "dapup.hpp"
 #include "ezButton.h"
+#include "crash.hpp"
 
 #define BUTTON_PIN_1 21
 #define BUTTON_PIN_2 25
 
 TFT_eSPI tft = TFT_eSPI();
 DeviceInfo device = DeviceInfo();
+DapUpProtocol dapup;
 bool needToSetup = false;
 ezButton button1(BUTTON_PIN_1);
 ezButton button2(BUTTON_PIN_2);
 
-int lastState = HIGH;
-int currentState;
+int centerX = tft.width() / 2;
+int centerY = tft.height() / 2;
 
 void tft_boot_logo();
 void drawProgressBar(TFT_eSPI &tft, int x, int y, int width, int height, uint8_t progress, uint16_t borderColor, uint16_t barColor, uint16_t bgColor);
@@ -26,7 +28,6 @@ void setup_nvs();
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("DeviceStatus: ");
   Serial.println("Starting WinkLink");
 
   // Initialises NVS for serial information
@@ -43,37 +44,20 @@ void setup() {
 void loop() {
   button1.loop();
   button2.loop();
-  
-  // Center coordinates
-  int centerX = tft.width() / 2;
-  int centerY = tft.height() / 2;
 
-  // Handle Button 1
-  if (button1.isPressed()) {
-    // Fill rectangle - properly centered
-    tft.fillScreen(TFT_BLACK); // Clear previous shapes
-    tft.fillRect(centerX - 60, centerY - 60, 120, 120, TFT_RED);
+  static unsigned long lastBroadcast = 0;
+  if (millis() - lastBroadcast > 5000) {
+    dapup.broadcast();
+    lastBroadcast = millis();
+    
+    // Optional: Print discovered devices
+    const auto& devices = dapup.getDiscoveredDevices();
+    Serial.printf("Discovered %d devices\n", devices.size());
+    
+    // Clean devices not seen in last 30 minutes
+    dapup.cleanOldDevices(30 * 60);
   }
 
-  if (button1.isReleased()) {
-    // Fill circle
-    tft.fillScreen(TFT_BLACK); // Clear previous shapes
-    tft.fillCircle(centerX, centerY, 60, TFT_RED);
-  }
-
-  // Handle Button 2
-  if (button2.isPressed()) {
-    // Fill rectangle - properly centered
-    tft.fillScreen(TFT_BLACK); // Clear previous shapes
-    tft.fillRect(centerX - 60, centerY - 60, 120, 120, TFT_BLUE);
-  }
-
-  if (button2.isReleased()) {
-    // Fill circle
-    tft.fillScreen(TFT_BLACK); // Clear previous shapes
-    tft.fillCircle(centerX, centerY, 60, TFT_BLUE);
-  }
-  
   delay(10); // Small delay to prevent CPU hogging
 }
 
@@ -93,24 +77,10 @@ void boot_bar() {
   needToSetup = device.read(tft);
   boot_bar.update(40);
 
-  setupWifi();
+  if (!dapup.begin(device.device_owner.c_str())) {
+    fatal_crash(tft, "DapUp failed to initialise");
+  }
   boot_bar.update(60);
-
-  // WiFi.begin("________", "________");
-  // boot_bar.update(80);
-  // int counter = 0;
-  // while (WiFi.status() != WL_CONNECTED) {
-  //   delay(500);
-  //   Serial.print(".");
-  //   counter+=1;
-  //   if (counter > 10) {
-  //     Serial.print("Unable to connect to network for time sync");
-  //     break;
-  //   }
-  // }
-  // if (counter <= 10) {
-  //   Serial.println("WiFi connected");
-  // }
 
   button1.setDebounceTime(100);
   button2.setDebounceTime(100);
