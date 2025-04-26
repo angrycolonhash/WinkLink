@@ -19,6 +19,8 @@ struct FriendInfo {
     char deviceName[MAX_DEVICE_NAME_LENGTH];
     uint8_t status;
     unsigned long lastSeen;
+    unsigned long lastRequestSent;     // Time we last sent a request or acknowledgment
+    bool pendingAcknowledgment;        // Whether we're waiting for a final acknowledgment
 };
 
 class FriendManager {
@@ -56,6 +58,12 @@ public:
     
     // Add a friend directly to the friends list
     bool addFriend(const FriendInfo& friend_info);
+    
+    // Process acknowledgment of a friend request
+    bool processRequestAcknowledgment(const DiscoveredDevice& device);
+    
+    // Send pending friend requests (retry mechanism)
+    void sendPendingRequests();
 };
 
 #endif // FRIEND_REQUEST_HPP

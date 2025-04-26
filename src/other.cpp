@@ -8,7 +8,6 @@ bool needToSetup = false;
 ezButton button1(BUTTON_PIN_1);
 ezButton button2(BUTTON_PIN_2);
 FriendManager friendManager;
-int friendRequestOption = 0;
 DiscoveredDevice selectedDevice;
 int centerX = 0; // Will be initialized after tft setup
 int centerY = 0; // Will be initialized after tft setup
@@ -53,10 +52,12 @@ int getStoredDeviceCount() {
     // ---------------------------
     NVS.begin();
     boot_bar.update(20);
+    Serial.println("Boot checkpoint 20");
   
     needToSetup = device.read(tft);
     boot_bar.update(40);
-  
+    Serial.println("Boot checkpoint 40");
+    
     if (needToSetup) {
       boot_bar.update(100);
       device_setup();
@@ -64,17 +65,21 @@ int getStoredDeviceCount() {
     } else {
       boot_bar.update(50);
     }
+    Serial.println("Boot checkpoint 50");
   
     if (!dapup.begin(device.device_owner.c_str(), device.device_name.c_str())) {
       fatal_crash(tft, "DapUp failed to initialise");
     }
     boot_bar.update(60);
+    Serial.println("Boot checkpoint 60");
   
     button1.setDebounceTime(100);
     button2.setDebounceTime(100);
     boot_bar.update(80);
+    Serial.println("Boot checkpoint 80");
     
     boot_bar.update(100);
+    Serial.println("Boot checkpoint 100");
     // ---------------------------
   }
   

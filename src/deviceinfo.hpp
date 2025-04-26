@@ -66,7 +66,7 @@ class DeviceInfo {
                 Serial.println("Successfully read device values!");
             }
 
-            Serial.printf("Need to setup: %s", needToSetup ? "true" : "false");
+            Serial.printf("Need to setup: %s\n", needToSetup ? "true" : "false");
             return needToSetup;
         }
 

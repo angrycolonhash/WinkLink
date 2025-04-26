@@ -74,18 +74,26 @@ bool FriendManager::sendFriendRequest(const DiscoveredDevice& device) {
     snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
             device.macAddr[0], device.macAddr[1], device.macAddr[2],
             device.macAddr[3], device.macAddr[4], device.macAddr[5]);
-    Serial.println("DEBUG: Sending friend request to device:");
-    Serial.printf("DEBUG: MAC: %s, Name: %s, Owner: %s\n", 
-                 macStr, device.deviceName, device.ownerName);
+    
+    if (debugLoggingEnabled) {
+        Serial.printf("DEBUG: Sending friend request to device:\n");
+        Serial.printf("DEBUG: MAC: %s, Name: %s, Owner: %s\n", 
+                     macStr, device.deviceName, device.ownerName);
+    }
     
     // Check if this device is already in our friends list
     for (auto& friend_info : friendsList) {
         if (memcmp(friend_info.macAddr, device.macAddr, 6) == 0) {
-            Serial.printf("DEBUG: Device already in friend list with status %d\n", friend_info.status);
+            if (debugLoggingEnabled) {
+                Serial.printf("DEBUG: Device already in friend list with status %d\n", friend_info.status);
+            }
+            
             // Update status if it's not already a friend
             if (friend_info.status != FRIEND_STATUS_ACCEPTED) {
                 friend_info.status = FRIEND_STATUS_REQUEST_SENT;
                 friend_info.lastSeen = millis();
+                friend_info.lastRequestSent = millis(); // Track when we sent the request
+                friend_info.pendingAcknowledgment = false; // Not waiting for ack yet
                 
                 // Update names in case they changed
                 strncpy(friend_info.ownerName, device.ownerName, MAX_OWNER_NAME_LENGTH);
@@ -94,9 +102,12 @@ bool FriendManager::sendFriendRequest(const DiscoveredDevice& device) {
                 friend_info.deviceName[MAX_DEVICE_NAME_LENGTH-1] = '\0';
                 
                 saveFriends();
-                Serial.println("DEBUG: Updated existing entry to status REQUEST_SENT");
-            } else {
-                Serial.println("DEBUG: Device is already an accepted friend");
+                
+                if (debugLoggingEnabled) {
+                    Serial.printf("DEBUG: Updated existing entry to status REQUEST_SENT\n");
+                }
+            } else if (debugLoggingEnabled) {
+                Serial.printf("DEBUG: Device is already an accepted friend\n");
             }
             return true;
         }
@@ -111,10 +122,15 @@ bool FriendManager::sendFriendRequest(const DiscoveredDevice& device) {
     newFriend.deviceName[MAX_DEVICE_NAME_LENGTH-1] = '\0';
     newFriend.status = FRIEND_STATUS_REQUEST_SENT;
     newFriend.lastSeen = millis();
+    newFriend.lastRequestSent = millis(); // Track when we sent the request
+    newFriend.pendingAcknowledgment = false; // Not waiting for ack yet
     
     friendsList.push_back(newFriend);
     saveFriends();
-    Serial.println("DEBUG: Added new entry with status REQUEST_SENT");
+    
+    if (debugLoggingEnabled) {
+        Serial.printf("DEBUG: Added new entry with status REQUEST_SENT\n");
+    }
     
     return true;
 }
@@ -140,10 +156,12 @@ bool FriendManager::acceptFriendRequest(const DiscoveredDevice& device) {
                 return true;
             }
             
-            // If there's a request received, accept it
+            // If there's a request received, accept it and mark for acknowledgment
             if (friend_info.status == FRIEND_STATUS_REQUEST_RECEIVED) {
                 friend_info.status = FRIEND_STATUS_ACCEPTED;
                 friend_info.lastSeen = millis();
+                friend_info.lastRequestSent = millis(); // Start tracking for acknowledgment
+                friend_info.pendingAcknowledgment = true; // Mark as needing acknowledgment
                 
                 // Update names in case they changed
                 strncpy(friend_info.ownerName, device.ownerName, MAX_OWNER_NAME_LENGTH);
@@ -152,7 +170,7 @@ bool FriendManager::acceptFriendRequest(const DiscoveredDevice& device) {
                 friend_info.deviceName[MAX_DEVICE_NAME_LENGTH-1] = '\0';
                 
                 saveFriends();
-                Serial.println("DEBUG: Successfully accepted friend request");
+                Serial.println("DEBUG: Successfully accepted friend request, will send acknowledgment");
                 return true;
             }
             
@@ -162,6 +180,8 @@ bool FriendManager::acceptFriendRequest(const DiscoveredDevice& device) {
                 Serial.println("DEBUG: Both devices sent friend requests to each other. Converting to ACCEPTED.");
                 friend_info.status = FRIEND_STATUS_ACCEPTED;
                 friend_info.lastSeen = millis();
+                friend_info.lastRequestSent = millis(); // Start tracking for acknowledgment
+                friend_info.pendingAcknowledgment = true; // Mark as needing acknowledgment
                 
                 // Update names in case they changed
                 strncpy(friend_info.ownerName, device.ownerName, MAX_OWNER_NAME_LENGTH);
@@ -170,7 +190,7 @@ bool FriendManager::acceptFriendRequest(const DiscoveredDevice& device) {
                 friend_info.deviceName[MAX_DEVICE_NAME_LENGTH-1] = '\0';
                 
                 saveFriends();
-                Serial.println("DEBUG: Successfully converted mutual requests to accepted");
+                Serial.println("DEBUG: Successfully converted mutual requests to accepted, will send acknowledgment");
                 return true;
             }
             
@@ -190,6 +210,8 @@ bool FriendManager::acceptFriendRequest(const DiscoveredDevice& device) {
     newFriend.deviceName[MAX_DEVICE_NAME_LENGTH-1] = '\0';
     newFriend.status = FRIEND_STATUS_ACCEPTED;
     newFriend.lastSeen = millis();
+    newFriend.lastRequestSent = millis(); // Start tracking for acknowledgment
+    newFriend.pendingAcknowledgment = true; // Mark as needing acknowledgment
     
     friendsList.push_back(newFriend);
     saveFriends();
@@ -300,4 +322,82 @@ bool FriendManager::addFriend(const FriendInfo& friend_info) {
     
     Serial.printf("DEBUG: Added new friend entry with status %d\n", friend_info.status);
     return true;
+}
+
+bool FriendManager::processRequestAcknowledgment(const DiscoveredDevice& device) {
+    // Handle receipt of an acknowledgment (friendRequestFlag = 2)
+    char macStr[18];
+    snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
+            device.macAddr[0], device.macAddr[1], device.macAddr[2],
+            device.macAddr[3], device.macAddr[4], device.macAddr[5]);
+    
+    // Look for this device in our friends list
+    for (auto& friend_info : friendsList) {
+        if (memcmp(friend_info.macAddr, device.macAddr, 6) == 0) {
+            // We only care about acknowledgments if we sent a request
+            if (friend_info.status == FRIEND_STATUS_REQUEST_SENT) {
+                // The other device has accepted our request
+                friend_info.status = FRIEND_STATUS_ACCEPTED;
+                friend_info.lastSeen = millis();
+                
+                // Update names in case they changed
+                strncpy(friend_info.ownerName, device.ownerName, MAX_OWNER_NAME_LENGTH);
+                friend_info.ownerName[MAX_OWNER_NAME_LENGTH-1] = '\0';
+                strncpy(friend_info.deviceName, device.deviceName, MAX_DEVICE_NAME_LENGTH);
+                friend_info.deviceName[MAX_DEVICE_NAME_LENGTH-1] = '\0';
+                
+                Serial.printf("DEBUG: Received acceptance acknowledgment from %s, friendship confirmed\n", macStr);
+                saveFriends();
+                return true;
+            }
+            else if (friend_info.status == FRIEND_STATUS_ACCEPTED && friend_info.pendingAcknowledgment) {
+                // This is a final "OK" acknowledgment for a mutual acceptance
+                friend_info.pendingAcknowledgment = false; // No need to send more acknowledgments
+                
+                Serial.printf("DEBUG: Received final confirmation from %s, friendship fully established\n", macStr);
+                saveFriends();
+                return true;
+            }
+            
+            // For other statuses, just update last seen
+            friend_info.lastSeen = millis();
+            return true;
+        }
+    }
+    
+    return false; // Device not found in our friends list
+}
+
+void FriendManager::sendPendingRequests() {
+    unsigned long currentTime = millis();
+    const unsigned long RETRY_INTERVAL = 10000; // 10 seconds between retries
+    
+    for (auto& friend_info : friendsList) {
+        // Check for requests that need to be retried and acknowledgments that need to be sent
+        if ((friend_info.status == FRIEND_STATUS_REQUEST_SENT || 
+             (friend_info.status == FRIEND_STATUS_ACCEPTED && friend_info.pendingAcknowledgment)) &&
+            (currentTime - friend_info.lastRequestSent > RETRY_INTERVAL)) {
+            
+            char macStr[18];
+            snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
+                    friend_info.macAddr[0], friend_info.macAddr[1], friend_info.macAddr[2],
+                    friend_info.macAddr[3], friend_info.macAddr[4], friend_info.macAddr[5]);
+            
+            if (friend_info.status == FRIEND_STATUS_REQUEST_SENT) {
+                Serial.printf("DEBUG: Retrying friend request to %s (%s)\n", 
+                             friend_info.deviceName, macStr);
+            } else {
+                Serial.printf("DEBUG: Sending acknowledgment to %s (%s)\n", 
+                             friend_info.deviceName, macStr);
+            }
+            
+            // Update the last sent timestamp
+            friend_info.lastRequestSent = currentTime;
+            
+            // We don't actually send the message here, it will be sent during the next broadcast
+            // The dapup protocol will check the friend status and set the appropriate flags
+        }
+    }
+    
+    saveFriends(); // Save any timestamp updates
 }

@@ -1,4 +1,5 @@
 #include "loop.hpp"
+#include "ui/friendUI.hpp"  // Add the missing include for FriendRequestNotifier
 
 // Global variables needed for state management
 static unsigned long lastBroadcast = 0;
@@ -43,6 +44,9 @@ void handleButtonPress(bool button1Pressed, bool button2Pressed) {
       break;
     case FRIEND_REQUEST:
       handleFriendRequestState(button1Pressed, button2Pressed);
+      break;
+    case PENDING_REQUESTS:
+      handlePendingRequestsState(button1Pressed, button2Pressed);
       break;
   }
 }
@@ -219,6 +223,76 @@ void handleFriendRequestState(bool button1Pressed, bool button2Pressed) {
   }
 }
 
+void handlePendingRequestsState(bool button1Pressed, bool button2Pressed) {
+  // Get only the pending friend requests
+  std::vector<FriendInfo> pendingRequests;
+  const auto& allFriends = friendManager.getFriendsList();
+  
+  // Filter for just the pending requests
+  for (const auto& f : allFriends) {
+    if (f.status == FRIEND_STATUS_REQUEST_RECEIVED) {
+      pendingRequests.push_back(f);
+    }
+  }
+  
+  // Safety check - if no pending requests, just go back to discovery
+  if (pendingRequests.empty()) {
+    currentState = DISCOVERY_SCREEN;
+    const auto& devices = dapup.getDiscoveredDevices();
+    drawDiscoveryScreen(tft, device.device_name, devices);
+    return;
+  }
+  
+  // Safety check - ensure pendingRequestIndex is valid
+  if (pendingRequestIndex >= pendingRequests.size()) {
+    pendingRequestIndex = 0;
+  }
+  
+  if (button1Pressed) {
+    // Navigate through pending requests
+    if (!pendingRequests.empty()) {
+      pendingRequestIndex = (pendingRequestIndex + 1) % pendingRequests.size();
+      drawPendingFriendRequests(tft, pendingRequests, pendingRequestIndex);
+    }
+  }
+  
+  if (button2Pressed) {
+    if (!pendingRequests.empty()) {
+      // Select the current request and show request dialog
+      // First find the corresponding discovered device
+      const auto& devices = dapup.getDiscoveredDevices();
+      bool deviceFound = false;
+      
+      for (const auto& dev : devices) {
+        if (memcmp(dev.macAddr, pendingRequests[pendingRequestIndex].macAddr, 6) == 0) {
+          selectedDevice = dev;
+          deviceFound = true;
+          break;
+        }
+      }
+      
+      if (deviceFound) {
+        // Show the friend request dialog
+        currentState = FRIEND_REQUEST;
+        friendRequestOption = 0;
+        drawFriendRequestDialog(tft, selectedDevice, friendRequestOption);
+      } else {
+        // Device not currently visible, show error toast
+        showToast("Device not in range", TFT_DARKRED);
+        // Return to discovery screen
+        currentState = DISCOVERY_SCREEN;
+        const auto& devices = dapup.getDiscoveredDevices();
+        drawDiscoveryScreen(tft, device.device_name, devices);
+      }
+    } else {
+      // No pending requests, return to discovery
+      currentState = DISCOVERY_SCREEN;
+      const auto& devices = dapup.getDiscoveredDevices();
+      drawDiscoveryScreen(tft, device.device_name, devices);
+    }
+  }
+}
+
 // Helper function to show toast messages
 void showToast(const String& message, uint16_t bgColor) {
   int centerX = tft.width() / 2;
@@ -239,9 +313,41 @@ void performPeriodicTasks() {
     dapup.broadcast();
     lastBroadcast = millis();    
     
+    // Check for pending friend requests and update notification flag
+    const auto& friends = friendManager.getFriendsList();
+    bool hasPendingRequests = false;
+    
+    for (const auto& f : friends) {
+      if (f.status == FRIEND_STATUS_REQUEST_RECEIVED) {
+        hasPendingRequests = true;
+        break;
+      }
+    }
+    
+    // Update the notification flag
+    FriendRequestNotifier::setNewRequestFlag(hasPendingRequests);
+    
     // Update display based on current UI state
     if (currentState == DISCOVERY_SCREEN) {
       drawDiscoveryScreen(tft, device.device_name, devices);
+      
+      // If we have pending requests and it's time to show a notification, show it
+      if (FriendRequestNotifier::shouldShowNotification()) {
+        // Show a notification indicator
+        FriendRequestNotifier::drawNotificationIndicator(tft);
+        
+        // Also show a toast notification
+        showToast("You have friend requests!", TFT_BLUE);
+        
+        // After toast disappears, redraw the screen with just the indicator
+        drawDiscoveryScreen(tft, device.device_name, devices);
+        FriendRequestNotifier::drawNotificationIndicator(tft);
+      }
+      // If we just have the indicator flag without the toast timing, just draw the indicator
+      else if (FriendRequestNotifier::getNewRequestFlag()) {
+        FriendRequestNotifier::drawNotificationIndicator(tft);
+      }
+      
       Serial.printf("Discovered %d devices\n", devices.size());
     } else if (currentState == DEVICE_SELECTION) {
       // Make sure selected index is valid after possible devices change
@@ -250,6 +356,11 @@ void performPeriodicTasks() {
         if (selectedDeviceIndex < 0) selectedDeviceIndex = 0;
       }
       drawDiscoveryScreenWithSelection(tft, device.device_name, devices, selectedDeviceIndex);
+      
+      // Also show notification indicator if needed
+      if (FriendRequestNotifier::getNewRequestFlag()) {
+        FriendRequestNotifier::drawNotificationIndicator(tft);
+      }
     }
   }
   
@@ -267,6 +378,11 @@ void performPeriodicTasks() {
     // Only update the display if we're in discovery mode
     if (currentState == DISCOVERY_SCREEN) {
       drawDiscoveryScreen(tft, device.device_name, devices);
+      
+      // Also show notification indicator if needed
+      if (FriendRequestNotifier::getNewRequestFlag()) {
+        FriendRequestNotifier::drawNotificationIndicator(tft);
+      }
     }
   }
 
@@ -284,6 +400,11 @@ void performPeriodicTasks() {
       
       // Redraw the current device list
       drawDiscoveryScreen(tft, device.device_name, devices);
+      
+      // Also show notification indicator if needed
+      if (FriendRequestNotifier::getNewRequestFlag()) {
+        FriendRequestNotifier::drawNotificationIndicator(tft);
+      }
     }
     
     lastReset = millis();
@@ -300,22 +421,47 @@ void handleSerialCommands() {
     String cmd = spaceIndex > 0 ? command.substring(0, spaceIndex) : command;
     String param = spaceIndex > 0 ? command.substring(spaceIndex + 1) : "";
     
+    // Debug and trace commands
+    if (cmd == "DEBUG=true") {
+      debugLoggingEnabled = true;
+      Serial.println("Debug logging enabled");
+      return;
+    }
+    else if (cmd == "DEBUG=false") {
+      debugLoggingEnabled = false;
+      Serial.println("Debug logging disabled");
+      return;
+    }
+    else if (cmd == "TRACE=true") {
+      traceLoggingEnabled = true;
+      Serial.println("Trace logging enabled");
+      return;
+    }
+    else if (cmd == "TRACE=false") {
+      traceLoggingEnabled = false;
+      Serial.println("Trace logging disabled");
+      return;
+    }
+    
     // Basic commands
     if (cmd == "help") {
       Serial.println("Available commands:");
       Serial.println("help                       - Show this help message");
+      Serial.println("DEBUG=true/false           - Enable/disable debug logging");
+      Serial.println("TRACE=true/false           - Enable/disable trace logging");
       Serial.println("factory_reset              - Reset device to factory settings");
       Serial.println("print_nvs                  - Print all NVS data");
       Serial.println("device_info                - Show current device information");
       Serial.println("scan                       - Perform a discovery scan and list devices");
       Serial.println("friends                    - List all friends");
       Serial.println("list_devices               - List all currently discovered devices");
+      Serial.println("list_requests              - List pending friend requests");
       Serial.println("send_request <index>       - Send friend request to device by index");
       Serial.println("accept_request <index>     - Accept friend request from device by index");
       Serial.println("decline_request <index>    - Decline friend request from device by index");
       Serial.println("remove_friend <index>      - Remove a friend by index (if supported)");
-      Serial.println("set_name <name>            - Set device name");
-      Serial.println("set_owner <name>           - Set owner name");
+      Serial.println("set_name <n>            - Set device name");
+      Serial.println("set_owner <n>           - Set owner name");
       Serial.println("reboot                     - Reboot the device");
     }
     else if (cmd == "factory_reset") {
@@ -350,6 +496,29 @@ void handleSerialCommands() {
     }
     else if (cmd == "list_devices") {
       listDiscoveredDevices();
+    }
+    else if (cmd == "list_requests") {
+      // List pending friend requests
+      const auto& friends = friendManager.getFriendsList();
+      int requestCount = 0;
+      
+      for (size_t i = 0; i < friends.size(); i++) {
+        if (friends[i].status == FRIEND_STATUS_REQUEST_RECEIVED) {
+          char macStr[18];
+          snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
+                  friends[i].macAddr[0], friends[i].macAddr[1], friends[i].macAddr[2],
+                  friends[i].macAddr[3], friends[i].macAddr[4], friends[i].macAddr[5]);
+          
+          Serial.printf("[%d] Request from: %s (%s) - MAC: %s\n", 
+                       requestCount++, friends[i].deviceName, friends[i].ownerName, macStr);
+        }
+      }
+      
+      if (requestCount == 0) {
+        Serial.println("No pending friend requests.");
+      } else {
+        Serial.printf("Total pending requests: %d\n", requestCount);
+      }
     }
     else if (cmd == "friends") {
       // Print list of all friends with their status
@@ -487,7 +656,7 @@ void handleSerialCommands() {
     else if (cmd == "set_owner") {
       if (param.length() > 0) {
         NVS.setString("device_owner", param);
-        device.device_owner = param; // Fixed: owner_name -> device_owner
+        device.device_owner = param;
         Serial.println("Owner name set to: " + param);
         Serial.println("Restart the device for changes to take full effect");
       } else {

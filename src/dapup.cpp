@@ -2,86 +2,73 @@
 #include "ArduinoNvs.h"
 #include "ui/friendRequest.hpp"  // Include the friendRequest header
 
+// Initialize global debug/trace flags
+bool debugLoggingEnabled = true;
+bool traceLoggingEnabled = false;
+
 // Forward declare the global friendManager instance
 extern FriendManager friendManager;
 
 // Initialize static instance for callbacks
 DapUpProtocol* DapUpProtocol::instance = nullptr;
 
-// Helper function to process friend requests - this avoids circular dependency issues
-static bool processIncomingFriendRequest(const DiscoveredDevice& device, const std::vector<DiscoveredDevice>& discoveredDevices) {
-    // Print debug info
-    char macStr[18];
-    snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
-             device.macAddr[0], device.macAddr[1], device.macAddr[2], 
-             device.macAddr[3], device.macAddr[4], device.macAddr[5]);
-    
-    Serial.printf("DEBUG: Processing friend request from %s (%s)\n", 
-                 device.deviceName, device.ownerName);
-    
-    // Get current status with this device
-    uint8_t currentStatus = friendManager.getFriendStatus(device.macAddr);
-    Serial.printf("DEBUG: Current status with this device: %d\n", currentStatus);
-    
-    // Handle based on existing status
-    if (currentStatus == 0) {  // FRIEND_STATUS_NONE
-        // Create a request from scratch
-        for (const auto& discoveredDevice : discoveredDevices) {
-            if (memcmp(discoveredDevice.macAddr, device.macAddr, 6) == 0) {
-                // Call friend manager directly to handle the request
-                friendManager.sendFriendRequest(discoveredDevice);
-                friendManager.acceptFriendRequest(discoveredDevice);
-                Serial.println("DEBUG: Created and accepted new friend request");
-                return true;
-            }
-        }
-    }
-    else if (currentStatus == 1) {  // FRIEND_STATUS_REQUEST_SENT
-        // If we also sent a request to them, automatically accept as a mutual request
-        Serial.println("DEBUG: Mutual friend requests detected, automatically accepting");
-        
-        // Find the device to call acceptFriendRequest
-        for (const auto& discoveredDevice : discoveredDevices) {
-            if (memcmp(discoveredDevice.macAddr, device.macAddr, 6) == 0) {
-                friendManager.acceptFriendRequest(discoveredDevice);
-                Serial.println("DEBUG: Successfully accepted mutual friend request");
-                return true;
-            }
-        }
-    }
-    
-    return false;
-}
-
+// Constructor
 DapUpProtocol::DapUpProtocol() {
-    // Set the singleton instance for callback access
+    // Set this instance for callbacks
     instance = this;
+    
+    // Initialize device name and owner fields
+    memset(myDeviceName, 0, MAX_DEVICE_NAME_LENGTH);
+    memset(myOwnerName, 0, MAX_OWNER_NAME_LENGTH);
 }
 
-// Update the begin method to store device name
+// Begin method to initialize the protocol
 bool DapUpProtocol::begin(const char* ownerName, const char* deviceName) {
-    // Copy owner name to member variable
-    strncpy(myOwnerName, ownerName, MAX_OWNER_NAME_LENGTH);
-    myOwnerName[MAX_OWNER_NAME_LENGTH - 1] = '\0'; // Ensure null termination
+    // Add debugging at the start
+    Serial.println("Beginning DapUp initialization...");
     
-    // Copy device name to member variable
-    strncpy(myDeviceName, deviceName, MAX_DEVICE_NAME_LENGTH);
-    myDeviceName[MAX_DEVICE_NAME_LENGTH - 1] = '\0'; // Ensure null termination
+    // Copy names to internal buffers
+    strncpy(myOwnerName, ownerName, MAX_OWNER_NAME_LENGTH - 1);
+    myOwnerName[MAX_OWNER_NAME_LENGTH - 1] = '\0';
     
-    // Set device as WiFi station
+    strncpy(myDeviceName, deviceName, MAX_DEVICE_NAME_LENGTH - 1);
+    myDeviceName[MAX_DEVICE_NAME_LENGTH - 1] = '\0';
+    
+    // Make sure WiFi is properly set up first
     WiFi.mode(WIFI_STA);
     
-    // Initialize ESP-NOW
-    if (esp_now_init() != ESP_OK) {
+    // Initialize the broadcast address (all 0xFF)
+    memset(broadcastAddress, 0xFF, 6);
+    
+    // De-initialize ESP-NOW if it was already initialized
+    esp_now_deinit();
+    
+    // Initialize ESP-NOW with error handling
+    esp_err_t result = esp_now_init();
+    if (result != ESP_OK) {
         Serial.println("Error initializing ESP-NOW");
+        Serial.printf("Error code: %d\n", result);
         return false;
     }
     
-    // Register callback functions
-    esp_now_register_send_cb(onDataSent);
-    esp_now_register_recv_cb(onDataReceived);
+    Serial.println("ESP-NOW initialized successfully");
     
-    // Add broadcast peer
+    // Register callback functions with error handling
+    result = esp_now_register_send_cb(onDataSent);
+    if (result != ESP_OK) {
+        Serial.println("Error registering send callback");
+        return false;
+    }
+    
+    result = esp_now_register_recv_cb(onDataReceived);
+    if (result != ESP_OK) {
+        Serial.println("Error registering receive callback");
+        return false;
+    }
+    
+    Serial.println("ESP-NOW callbacks registered successfully");
+    
+    // Register the broadcast address as a peer
     esp_now_peer_info_t peerInfo = {};
     memcpy(peerInfo.peer_addr, broadcastAddress, 6);
     peerInfo.channel = 0;
@@ -92,12 +79,19 @@ bool DapUpProtocol::begin(const char* ownerName, const char* deviceName) {
         return false;
     }
     
-    Serial.println("DapUp protocol initialized successfully");
+    if (debugLoggingEnabled) {
+        Serial.printf("DEBUG: DapUp initialized with device=%s, owner=%s\n", 
+                      myDeviceName, myOwnerName);
+    }
+    
     return true;
 }
 
 // Update the broadcast method to include device name and friend request status
 bool DapUpProtocol::broadcast() {
+    // First, process any pending friend requests that need retrying
+    friendManager.sendPendingRequests();
+    
     // Create device info structure
     DiscoveredDevice myInfo = {};
     WiFi.macAddress(myInfo.macAddr);
@@ -112,7 +106,9 @@ bool DapUpProtocol::broadcast() {
     const auto& devices = discoveredDevices;
     
     // Debug print for broadcasting
-    Serial.println("DEBUG: Broadcasting our device info with request flags");
+    if (debugLoggingEnabled) {
+        Serial.printf("DEBUG: Broadcasting our device info with request flags\n");
+    }
     
     // Send individual messages to each discovered device with the appropriate friend status
     for (const auto& device : devices) {
@@ -122,16 +118,47 @@ bool DapUpProtocol::broadcast() {
         // Get our current relationship status with this device
         uint8_t status = friendManager.getFriendStatus(device.macAddr);
         
+        // Check if we need to send a specific message to this device
+        bool sendDirectMessage = false;
+        
+        // Look for the specific friend entry to check if acknowledgment is pending
+        bool pendingAck = false;
+        const auto& friendsList = friendManager.getFriendsList();
+        for (const auto& friend_info : friendsList) {
+            if (memcmp(friend_info.macAddr, device.macAddr, 6) == 0) {
+                if (friend_info.status == FRIEND_STATUS_ACCEPTED && 
+                    friend_info.pendingAcknowledgment) {
+                    pendingAck = true;
+                }
+                break;
+            }
+        }
+        
         // Set the friend request flag based on our status with this device
-        // This communicates our friend status to the other device
-        if (status == 1) {  // FRIEND_STATUS_REQUEST_SENT = 1
+        if (status == FRIEND_STATUS_REQUEST_SENT) {
+            // We're sending a friend request
             deviceSpecificInfo.friendRequestFlag = 1;  // 1 means we're sending a request
-            
+            sendDirectMessage = true;
+        }
+        else if (status == FRIEND_STATUS_ACCEPTED && pendingAck) {
+            // We've accepted their request and need to send acknowledgment
+            deviceSpecificInfo.friendRequestFlag = 2;  // 2 means we're acknowledging their request
+            sendDirectMessage = true;
+        }
+        
+        if (sendDirectMessage) {
             char macStr[18];
             snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
                     device.macAddr[0], device.macAddr[1], device.macAddr[2],
                     device.macAddr[3], device.macAddr[4], device.macAddr[5]);
-            Serial.printf("DEBUG: Sending friend request flag to %s\n", macStr);
+            
+            if (debugLoggingEnabled) {
+                if (status == FRIEND_STATUS_REQUEST_SENT) {
+                    Serial.printf("DEBUG: Sending friend request to %s\n", macStr);
+                } else {
+                    Serial.printf("DEBUG: Sending acknowledgment to %s\n", macStr);
+                }
+            }
             
             // Send direct message to this specific device
             uint8_t specificAddr[6];
@@ -146,26 +173,54 @@ bool DapUpProtocol::broadcast() {
             // First check if peer exists, if not add it
             if (esp_now_is_peer_exist(specificAddr) == false) {
                 if (esp_now_add_peer(&peerInfo) != ESP_OK) {
-                    Serial.printf("Failed to add peer %s\n", macStr);
+                    if (debugLoggingEnabled) {
+                        Serial.printf("DEBUG: Failed to add peer %s\n", macStr);
+                    }
                     continue; // Skip this peer if we can't add it
                 }
-                Serial.printf("Added peer %s\n", macStr);
+                if (debugLoggingEnabled) {
+                    Serial.printf("DEBUG: Added peer %s\n", macStr);
+                }
+            }
+            
+            // TRACE logging for data being sent
+            if (traceLoggingEnabled) {
+                Serial.printf("TRACE: SENDING DATA TO %s\n", macStr);
+                Serial.printf("TRACE: Device: %s, Owner: %s\n", deviceSpecificInfo.deviceName, deviceSpecificInfo.ownerName);
+                Serial.printf("TRACE: FriendRequestFlag: %d\n", deviceSpecificInfo.friendRequestFlag);
+                Serial.printf("TRACE: LastSeen: %lu\n", deviceSpecificInfo.lastSeen);
+                Serial.printf("TRACE: Data Size: %d bytes\n", sizeof(DiscoveredDevice));
             }
             
             esp_err_t result = esp_now_send(specificAddr, (uint8_t*)&deviceSpecificInfo, sizeof(DiscoveredDevice));
             
-            if (result != ESP_OK) {
-                Serial.printf("Error sending targeted message to %s\n", macStr);
+            if (result != ESP_OK && debugLoggingEnabled) {
+                Serial.printf("DEBUG: Error sending targeted message to %s\n", macStr);
             }
         }
     }
     
     // Also send a general broadcast without specific friend flags
     myInfo.friendRequestFlag = 0;  // No friend request flag for general broadcast
+    
+    // TRACE logging for broadcast data
+    if (traceLoggingEnabled) {
+        char macStr[18];
+        snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
+                 myInfo.macAddr[0], myInfo.macAddr[1], myInfo.macAddr[2],
+                 myInfo.macAddr[3], myInfo.macAddr[4], myInfo.macAddr[5]);
+        
+        Serial.printf("TRACE: SENDING BROADCAST\n");
+        Serial.printf("TRACE: My MAC: %s\n", macStr);
+        Serial.printf("TRACE: Device: %s, Owner: %s\n", myInfo.deviceName, myInfo.ownerName);
+        Serial.printf("TRACE: FriendRequestFlag: %d\n", myInfo.friendRequestFlag);
+        Serial.printf("TRACE: Data Size: %d bytes\n", sizeof(DiscoveredDevice));
+    }
+    
     esp_err_t result = esp_now_send(broadcastAddress, (uint8_t*)&myInfo, sizeof(DiscoveredDevice));
     
-    if (result != ESP_OK) {
-        Serial.println("Error sending general broadcast");
+    if (result != ESP_OK && debugLoggingEnabled) {
+        Serial.printf("DEBUG: Error sending general broadcast\n");
         return false;
     }
     
@@ -179,18 +234,34 @@ void DapUpProtocol::processReceivedDevice(const DiscoveredDevice& device) {
              device.macAddr[0], device.macAddr[1], device.macAddr[2], 
              device.macAddr[3], device.macAddr[4], device.macAddr[5]);
     
-    Serial.printf("DEBUG: Processing received device: %s - Flag: %d\n", 
-                 macStr, device.friendRequestFlag);
+    if (debugLoggingEnabled) {
+        Serial.printf("DEBUG: Processing received device: %s - Flag: %d\n", 
+                     macStr, device.friendRequestFlag);
+    }
     
-    // Handle friend request flag if set
+    // TRACE logging for data being received
+    if (traceLoggingEnabled) {
+        Serial.printf("TRACE: RECEIVED DATA FROM %s\n", macStr);
+        Serial.printf("TRACE: Device: %s, Owner: %s\n", device.deviceName, device.ownerName);
+        Serial.printf("TRACE: FriendRequestFlag: %d\n", device.friendRequestFlag);
+        Serial.printf("TRACE: LastSeen: %lu\n", device.lastSeen);
+        Serial.printf("TRACE: Data Size: %d bytes\n", sizeof(DiscoveredDevice));
+    }
+    
+    // Handle friend request flag
     if (device.friendRequestFlag == 1) {
-        Serial.printf("DEBUG: Received friend request from %s (%s)\n", 
-                     device.deviceName, device.ownerName);
+        // This is a friend request
+        if (debugLoggingEnabled) {
+            Serial.printf("DEBUG: Received friend request from %s (%s)\n", 
+                         device.deviceName, device.ownerName);
+        }
         
         // Access friend manager to update the status
         uint8_t currentStatus = friendManager.getFriendStatus(device.macAddr);
         
-        Serial.printf("DEBUG: Current status with this device: %d\n", currentStatus);
+        if (debugLoggingEnabled) {
+            Serial.printf("DEBUG: Current status with this device: %d\n", currentStatus);
+        }
         
         // Handle based on existing status
         if (currentStatus == FRIEND_STATUS_NONE) {
@@ -203,25 +274,40 @@ void DapUpProtocol::processReceivedDevice(const DiscoveredDevice& device) {
             newFriend.deviceName[MAX_DEVICE_NAME_LENGTH-1] = '\0';
             newFriend.status = FRIEND_STATUS_REQUEST_RECEIVED;
             newFriend.lastSeen = millis();
+            newFriend.lastRequestSent = 0; // We haven't sent anything yet
+            newFriend.pendingAcknowledgment = false;
             
             // Add the friend to our list
             friendManager.addFriend(newFriend);
-            Serial.println("DEBUG: Added new friend request with REQUEST_RECEIVED status");
+            if (debugLoggingEnabled) {
+                Serial.printf("DEBUG: Added new friend request with REQUEST_RECEIVED status\n");
+            }
+            
+            // Notify UI that we have a new friend request
+            // We'll implement a system for this shortly
         }
         else if (currentStatus == FRIEND_STATUS_REQUEST_SENT) {
-            // If we also sent a request to them, automatically accept as a mutual request
-            Serial.println("DEBUG: Mutual friend requests detected, automatically accepting");
-            
-            // Find the device to call acceptFriendRequest
-            for (const auto& discoveredDevice : discoveredDevices) {
-                if (memcmp(discoveredDevice.macAddr, device.macAddr, 6) == 0) {
-                    friendManager.acceptFriendRequest(discoveredDevice);
-                    Serial.println("DEBUG: Successfully accepted mutual friend request");
-                    break;
-                }
+            // If we also sent a request to them, this is a mutual request
+            // We'll no longer automatically accept it - let the user confirm
+            if (debugLoggingEnabled) {
+                Serial.printf("DEBUG: Mutual friend requests detected - waiting for user to accept\n");
             }
         }
         // Do nothing if we are already friends or have already received a request
+    }
+    else if (device.friendRequestFlag == 2) {
+        // This is an acknowledgment of a friend request acceptance
+        if (debugLoggingEnabled) {
+            Serial.printf("DEBUG: Received friend request acknowledgment from %s (%s)\n", 
+                      device.deviceName, device.ownerName);
+        }
+        
+        // Process the acknowledgment
+        if (friendManager.processRequestAcknowledgment(device)) {
+            if (debugLoggingEnabled) {
+                Serial.printf("DEBUG: Successfully processed acknowledgment\n");
+            }
+        }
     }
     
     // Check if we already have this device in our discovered devices list
@@ -231,8 +317,10 @@ void DapUpProtocol::processReceivedDevice(const DiscoveredDevice& device) {
             // Check if owner name has changed
             if (strcmp(existingDevice.ownerName, device.ownerName) != 0) {
                 // Owner name has changed - this is a rediscovered device with a different owner
-                Serial.printf("REDISCOVERED: Device %s changed owner from '%s' to '%s'\n", 
-                             macStr, existingDevice.ownerName, device.ownerName);
+                if (debugLoggingEnabled) {
+                    Serial.printf("DEBUG: REDISCOVERED: Device %s changed owner from '%s' to '%s'\n", 
+                               macStr, existingDevice.ownerName, device.ownerName);
+                }
                 
                 // Store the previous owner name
                 strncpy(existingDevice.previousOwnerName, existingDevice.ownerName, MAX_OWNER_NAME_LENGTH);
@@ -262,12 +350,10 @@ void DapUpProtocol::processReceivedDevice(const DiscoveredDevice& device) {
         memset(newDevice.previousOwnerName, 0, MAX_OWNER_NAME_LENGTH); // Clear previous owner
         discoveredDevices.push_back(newDevice);
         
-        Serial.print("New device discovered: ");
-        Serial.print(macStr);
-        Serial.print(" - Device: ");
-        Serial.print(device.deviceName);
-        Serial.print(" - Owner: ");
-        Serial.println(device.ownerName);
+        if (debugLoggingEnabled) {
+            Serial.printf("DEBUG: New device discovered: %s - Device: %s, Owner: %s\n", 
+                       macStr, device.deviceName, device.ownerName);
+        }
     }
 }
 

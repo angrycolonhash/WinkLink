@@ -6,6 +6,8 @@
 UIState currentState = DISCOVERY_SCREEN;
 int selectedDeviceIndex = -1;    // Currently highlighted device
 int selectedMenuOption = 0;      // Currently selected menu option (0-3)
+int friendRequestOption = 0;     // Option selected in the friend request dialog
+int pendingRequestIndex = 0;     // Selected index in pending requests screen
 
 void initDeviceMenu() {
     currentState = DISCOVERY_SCREEN;

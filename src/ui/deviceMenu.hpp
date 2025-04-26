@@ -10,7 +10,8 @@ enum UIState {
     DEVICE_SELECTION,
     FRIEND_REQUEST,
     FRIEND_ACTION_MENU,  // Add this new state
-    DEVICE_MENU
+    DEVICE_MENU,
+    PENDING_REQUESTS     // New state for viewing pending friend requests
 };
 
 // Declare variables as extern - they'll be defined in the .cpp file
@@ -18,6 +19,7 @@ extern UIState currentState;
 extern int selectedDeviceIndex;
 extern int selectedMenuOption;
 extern int friendRequestOption; // Add the missing variable declaration
+extern int pendingRequestIndex; // Index for pending friend requests screen
 
 // Function prototypes
 void initDeviceMenu();

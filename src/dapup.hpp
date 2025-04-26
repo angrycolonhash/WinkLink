@@ -11,6 +11,10 @@
 #define MAX_OWNER_NAME_LENGTH 20
 #define MAX_DEVICE_NAME_LENGTH 32
 
+// Global debug/trace flags
+extern bool debugLoggingEnabled;
+extern bool traceLoggingEnabled;
+
 // Forward declarations
 struct FriendInfo;
 class FriendManager;
@@ -20,7 +24,7 @@ struct DiscoveredDevice {
     char ownerName[MAX_OWNER_NAME_LENGTH];        
     char deviceName[MAX_DEVICE_NAME_LENGTH];      
     unsigned long lastSeen;
-    uint8_t friendRequestFlag;  // 0: none, 1: sending request  
+    uint8_t friendRequestFlag;  // 0: none, 1: sending request, 2: acknowledging acceptance
     bool ownerChanged;          // Flag to track if owner name has changed
     char previousOwnerName[MAX_OWNER_NAME_LENGTH]; // Previous owner name for tracking changes
     
