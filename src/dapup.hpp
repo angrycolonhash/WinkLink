@@ -54,6 +54,8 @@ public:
     
     // Clean up old devices (optional, based on timestamp)
     void cleanOldDevices(unsigned long maxAge);
+
+    void clearDiscoveredDevices();
 };
 
 #endif // DAPUP_HPP

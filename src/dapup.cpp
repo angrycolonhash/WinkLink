@@ -1,4 +1,5 @@
 #include "dapup.hpp"
+#include "ArduinoNvs.h"
 
 // Initialize static instance for callbacks
 DapUpProtocol* DapUpProtocol::instance = nullptr;
@@ -121,4 +122,8 @@ void DapUpProtocol::cleanOldDevices(unsigned long maxAge) {
             ++it;
         }
     }
+}
+
+void DapUpProtocol::clearDiscoveredDevices() {
+    discoveredDevices.clear();
 }

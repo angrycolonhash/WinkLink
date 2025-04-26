@@ -8,6 +8,7 @@
 #include "dapup.hpp"
 #include "ezButton.h"
 #include "crash.hpp"
+#include "setup.hpp"
 
 #define BUTTON_PIN_1 21
 #define BUTTON_PIN_2 25
@@ -23,8 +24,9 @@ int centerX = tft.width() / 2;
 int centerY = tft.height() / 2;
 
 void tft_boot_logo();
-void drawProgressBar(TFT_eSPI &tft, int x, int y, int width, int height, uint8_t progress, uint16_t borderColor, uint16_t barColor, uint16_t bgColor);
 void setup_nvs();
+void storeDiscoveredDevices();
+int getStoredDeviceCount();
 
 void setup() {
   Serial.begin(115200);
@@ -46,19 +48,78 @@ void loop() {
   button2.loop();
 
   static unsigned long lastBroadcast = 0;
+  static unsigned long lastReset = 0;
+  
+  // Every 5 seconds, broadcast and update display
   if (millis() - lastBroadcast > 5000) {
     dapup.broadcast();
-    lastBroadcast = millis();
+    lastBroadcast = millis();    
     
-    // Optional: Print discovered devices
+    // Get and display discovered devices
     const auto& devices = dapup.getDiscoveredDevices();
+    drawDiscoveryScreen(tft, device.device_name, devices.size());
     Serial.printf("Discovered %d devices\n", devices.size());
     
     // Clean devices not seen in last 30 minutes
     dapup.cleanOldDevices(30 * 60);
   }
 
+  // Every 30 seconds, store devices and reset discovery
+  if (millis() - lastReset > 30000) {
+    // Store current devices before clearing
+    storeDiscoveredDevices();
+    
+    // Show stored device count briefly
+    int storedCount = getStoredDeviceCount();
+    Serial.printf("Stored %d devices in history\n", storedCount);
+    
+    // Clear the discovered devices
+    dapup.clearDiscoveredDevices();
+    drawDiscoveryScreen(tft, device.device_name, 0); // Update display with 0 devices
+    
+    lastReset = millis();
+  }
+
+  if (Serial.available()) {
+    String command = Serial.readStringUntil('\n');
+    command.trim();
+    
+    if (command == "factory_reset") {
+      Serial.println("Factory reset command received");
+      factoryReset();
+    }
+  }
+
   delay(10); // Small delay to prevent CPU hogging
+}
+
+int getStoredDeviceCount() {
+  return NVS.getInt("dev_count", 0);
+}
+
+void storeDiscoveredDevices() {
+  const auto& devices = dapup.getDiscoveredDevices();
+  
+  // Store number of devices
+  NVS.setInt("dev_count", devices.size());
+  
+  // Store each device
+  for (size_t i = 0; i < devices.size(); i++) {
+      String keyPrefix = "dev_" + String(i) + "_";
+      
+      // Convert MAC address to string
+      char macStr[18];
+      snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
+              devices[i].macAddr[0], devices[i].macAddr[1], devices[i].macAddr[2],
+              devices[i].macAddr[3], devices[i].macAddr[4], devices[i].macAddr[5]);
+      
+      // Store device info
+      NVS.setString(keyPrefix + "mac", macStr);
+      NVS.setString(keyPrefix + "owner", devices[i].ownerName);
+      NVS.setInt(keyPrefix + "seen", static_cast<int32_t>(devices[i].lastSeen));
+  }
+  
+  Serial.printf("Stored %d devices to NVS\n", devices.size());
 }
 
 void boot_bar() {
@@ -76,6 +137,14 @@ void boot_bar() {
 
   needToSetup = device.read(tft);
   boot_bar.update(40);
+
+  if (needToSetup) {
+    boot_bar.update(100);
+    device_setup();
+    return;
+  } else {
+    boot_bar.update(50);
+  }
 
   if (!dapup.begin(device.device_owner.c_str())) {
     fatal_crash(tft, "DapUp failed to initialise");
