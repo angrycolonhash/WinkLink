@@ -256,18 +256,72 @@ void handleSerialCommands() {
     String command = Serial.readStringUntil('\n');
     command.trim();
     
-    if (command == "factory_reset") {
+    // Split command into parts (for commands with parameters)
+    int spaceIndex = command.indexOf(' ');
+    String cmd = spaceIndex > 0 ? command.substring(0, spaceIndex) : command;
+    String param = spaceIndex > 0 ? command.substring(spaceIndex + 1) : "";
+    
+    // Basic commands
+    if (cmd == "help") {
+      Serial.println("Available commands:");
+      Serial.println("help                       - Show this help message");
+      Serial.println("factory_reset              - Reset device to factory settings");
+      Serial.println("print_nvs                  - Print all NVS data");
+      Serial.println("device_info                - Show current device information");
+      Serial.println("scan                       - Perform a discovery scan and list devices");
+      Serial.println("friends                    - List all friends");
+      Serial.println("list_devices               - List all currently discovered devices");
+      Serial.println("send_request <index>       - Send friend request to device by index");
+      Serial.println("accept_request <index>     - Accept friend request from device by index");
+      Serial.println("decline_request <index>    - Decline friend request from device by index");
+      Serial.println("remove_friend <index>      - Remove a friend by index (if supported)");
+      Serial.println("set_name <name>            - Set device name");
+      Serial.println("set_owner <name>           - Set owner name");
+      Serial.println("reboot                     - Reboot the device");
+    }
+    else if (cmd == "factory_reset") {
       Serial.println("Factory reset command received");
       factoryReset();
     } 
-    else if (command == "print_nvs") {
+    else if (cmd == "print_nvs") {
       Serial.println("Printing all NVS data");
       printNvsInfo();
     }
-    else if (command == "friends") {
+    else if (cmd == "device_info") {
+      Serial.println("Device Information:");
+      Serial.println("Name: " + device.device_name);
+      Serial.println("Owner: " + device.device_owner);
+      
+      // Using WiFi MAC address instead of device.mac_addr
+      uint8_t mac[6];
+      WiFi.macAddress(mac);
+      char macStr[18];
+      snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
+              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+      Serial.println("MAC: " + String(macStr));
+    }
+    else if (cmd == "scan") {
+      Serial.println("Initiating discovery scan...");
+      dapup.broadcast();
+      delay(3000); // Wait a bit for responses
+      Serial.println("Scan complete.");
+      const auto& devices = dapup.getDiscoveredDevices();
+      Serial.printf("Discovered %d devices\n", devices.size());
+      listDiscoveredDevices();
+    }
+    else if (cmd == "list_devices") {
+      listDiscoveredDevices();
+    }
+    else if (cmd == "friends") {
       // Print list of all friends with their status
       Serial.println("Friend List:");
       const auto& friends = friendManager.getFriendsList();
+      if (friends.empty()) {
+        Serial.println("No friends found.");
+        return;
+      }
+      
+      int index = 0;
       for (const auto& f : friends) {
         char macStr[18];
         snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
@@ -283,9 +337,163 @@ void handleSerialCommands() {
           default: statusStr = "Unknown"; break;
         }
         
-        Serial.printf("MAC: %s, Name: %s, Owner: %s, Status: %s\n", 
-                     macStr, f.deviceName, f.ownerName, statusStr.c_str());
+        Serial.printf("[%d] MAC: %s, Name: %s, Owner: %s, Status: %s\n", 
+                     index++, macStr, f.deviceName, f.ownerName, statusStr.c_str());
       }
     }
+    else if (cmd == "send_request") {
+      int deviceIndex = param.toInt();
+      const auto& devices = dapup.getDiscoveredDevices();
+      
+      if (deviceIndex >= 0 && deviceIndex < (int)devices.size()) {
+        DiscoveredDevice target = devices[deviceIndex];
+        if (friendManager.sendFriendRequest(target)) {
+          Serial.printf("Friend request sent to %s (%s)\n", target.deviceName, target.ownerName);
+        } else {
+          Serial.println("Failed to send friend request");
+        }
+      } else {
+        Serial.printf("Invalid device index. Use 'list_devices' to see available devices (0-%d)\n", 
+                     devices.empty() ? 0 : devices.size() - 1);
+      }
+    }
+    else if (cmd == "accept_request") {
+      int deviceIndex = param.toInt();
+      const auto& devices = dapup.getDiscoveredDevices();
+      
+      if (deviceIndex >= 0 && deviceIndex < (int)devices.size()) {
+        DiscoveredDevice target = devices[deviceIndex];
+        uint8_t status = friendManager.getFriendStatus(target.macAddr);
+        
+        if (status == FRIEND_STATUS_REQUEST_RECEIVED) {
+          if (friendManager.acceptFriendRequest(target)) {
+            Serial.printf("Friend request from %s (%s) accepted\n", target.deviceName, target.ownerName);
+          } else {
+            Serial.println("Failed to accept friend request");
+          }
+        } else {
+          Serial.println("No pending friend request from this device");
+        }
+      } else {
+        Serial.printf("Invalid device index. Use 'list_devices' to see available devices (0-%d)\n", 
+                     devices.empty() ? 0 : devices.size() - 1);
+      }
+    }
+    else if (cmd == "decline_request") {
+      int deviceIndex = param.toInt();
+      const auto& devices = dapup.getDiscoveredDevices();
+      
+      if (deviceIndex >= 0 && deviceIndex < (int)devices.size()) {
+        DiscoveredDevice target = devices[deviceIndex];
+        uint8_t status = friendManager.getFriendStatus(target.macAddr);
+        
+        if (status == FRIEND_STATUS_REQUEST_RECEIVED) {
+          if (friendManager.declineFriendRequest(target)) {
+            Serial.printf("Friend request from %s (%s) declined\n", target.deviceName, target.ownerName);
+          } else {
+            Serial.println("Failed to decline friend request");
+          }
+        } else {
+          Serial.println("No pending friend request from this device");
+        }
+      } else {
+        Serial.printf("Invalid device index. Use 'list_devices' to see available devices (0-%d)\n", 
+                     devices.empty() ? 0 : devices.size() - 1);
+      }
+    }
+    else if (cmd == "remove_friend") {
+      int friendIndex = param.toInt();
+      const auto& friends = friendManager.getFriendsList();
+      
+      if (friendIndex >= 0 && friendIndex < (int)friends.size()) {
+        const auto& f = friends[friendIndex]; // Using const auto& instead of Friend type
+        
+        // Check if removeFriend method exists, otherwise use a safe method
+        if (friendManager.getFriendStatus(f.macAddr) == FRIEND_STATUS_ACCEPTED) {
+          // Using declineFriendRequest as a fallback if removeFriend is not available
+          bool success = false;
+          
+          // Try to find this friend in discovered devices
+          const auto& devices = dapup.getDiscoveredDevices();
+          for (const auto& dev : devices) {
+            if (memcmp(dev.macAddr, f.macAddr, 6) == 0) {
+              success = friendManager.declineFriendRequest(dev);
+              break;
+            }
+          }
+          
+          if (success) {
+            Serial.printf("Friend %s (%s) removed\n", f.deviceName, f.ownerName);
+          } else {
+            Serial.println("Failed to remove friend. Friend may not be currently discovered.");
+          }
+        } else {
+          Serial.println("Cannot remove - not an accepted friend");
+        }
+      } else {
+        Serial.printf("Invalid friend index. Use 'friends' to see available friends (0-%d)\n", 
+                     friends.empty() ? 0 : friends.size() - 1);
+      }
+    }
+    else if (cmd == "set_name") {
+      if (param.length() > 0) {
+        NVS.setString("device_name", param);
+        device.device_name = param;
+        Serial.println("Device name set to: " + param);
+        Serial.println("Restart the device for changes to take full effect");
+      } else {
+        Serial.println("Error: name parameter required");
+      }
+    }
+    else if (cmd == "set_owner") {
+      if (param.length() > 0) {
+        NVS.setString("device_owner", param);
+        device.device_owner = param; // Fixed: owner_name -> device_owner
+        Serial.println("Owner name set to: " + param);
+        Serial.println("Restart the device for changes to take full effect");
+      } else {
+        Serial.println("Error: owner parameter required");
+      }
+    }
+    else if (cmd == "reboot") {
+      Serial.println("Rebooting device...");
+      delay(500);
+      ESP.restart();
+    }
+    else {
+      Serial.println("Unknown command. Type 'help' for available commands.");
+    }
+  }
+}
+
+// Helper function to list discovered devices with indices
+void listDiscoveredDevices() {
+  const auto& devices = dapup.getDiscoveredDevices();
+  
+  if (devices.empty()) {
+    Serial.println("No devices discovered. Try 'scan' command.");
+    return;
+  }
+  
+  Serial.printf("Discovered Devices (%d):\n", devices.size());
+  for (int i = 0; i < (int)devices.size(); i++) {
+    const auto& dev = devices[i];
+    char macStr[18];
+    snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
+            dev.macAddr[0], dev.macAddr[1], dev.macAddr[2],
+            dev.macAddr[3], dev.macAddr[4], dev.macAddr[5]);
+    
+    uint8_t friendStatus = friendManager.getFriendStatus(dev.macAddr);
+    String statusStr;
+    switch(friendStatus) {
+      case FRIEND_STATUS_NONE: statusStr = "None"; break;
+      case FRIEND_STATUS_REQUEST_SENT: statusStr = "Request Sent"; break;
+      case FRIEND_STATUS_REQUEST_RECEIVED: statusStr = "Request Received"; break;
+      case FRIEND_STATUS_ACCEPTED: statusStr = "Friends"; break;
+      default: statusStr = "Unknown"; break;
+    }
+    
+    Serial.printf("[%d] MAC: %s, Name: %s, Owner: %s, Status: %s\n", 
+                 i, macStr, dev.deviceName, dev.ownerName, statusStr.c_str());
   }
 }

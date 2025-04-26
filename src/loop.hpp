@@ -11,6 +11,7 @@ void handleFriendActionMenuState(bool button1Pressed, bool button2Pressed);
 void handleFriendRequestState(bool button1Pressed, bool button2Pressed);
 void performPeriodicTasks();
 void handleSerialCommands();
-void showToast(const String& message, uint16_t bgColor); // Added missing function declaration
+void showToast(const String& message, uint16_t bgColor);
+void listDiscoveredDevices(); // New helper function for serial commands
 
 #endif
