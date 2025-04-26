@@ -1,6 +1,7 @@
 #include "dapup.hpp"
 #include "ArduinoNvs.h"
 #include "ui/friendRequest.hpp"  // Include the friendRequest header
+#include "ui/blockedDeviceManager.hpp"  // Include the blocked device manager
 
 // Initialize global debug/trace flags
 bool debugLoggingEnabled = true;
@@ -233,6 +234,15 @@ void DapUpProtocol::processReceivedDevice(const DiscoveredDevice& device) {
     snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
              device.macAddr[0], device.macAddr[1], device.macAddr[2], 
              device.macAddr[3], device.macAddr[4], device.macAddr[5]);
+    
+    // Check if this device is blocked - if so, ignore it completely
+    if (blockedDeviceManager.isDeviceBlocked(device.macAddr)) {
+        if (debugLoggingEnabled) {
+            Serial.printf("DEBUG: Ignoring blocked device: %s - %s (%s)\n", 
+                         macStr, device.deviceName, device.ownerName);
+        }
+        return; // Skip processing this device
+    }
     
     if (debugLoggingEnabled) {
         Serial.printf("DEBUG: Processing received device: %s - Flag: %d\n", 

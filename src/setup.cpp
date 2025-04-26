@@ -73,8 +73,8 @@ const char* setupHTML = R"rawliteral(
 </head>
 <body>
     <div class="container">
-        <div class="logo">😉</div>
-        <h1>WinkLink Setup</h1>
+        <div class="logo">WinkLink</div>
+        <h1>WinkLink Device Setup</h1>
         <form action="/save" method="post">
             <div class="form-group">
                 <label for="deviceName">Device Name:</label>
@@ -128,7 +128,8 @@ void startSetupServer() {
             // Send response to browser
             setupServer.send(200, "text/html", 
                 "<html><head><meta http-equiv='refresh' content='5;url=/'></head>"
-                "<body><h1>Settings Saved!</h1><p>Your device will restart now.</p></body></html>");
+                "<body><h1>Settings Saved!</h1>"
+                "<p>Your device will restart now. This page will automatically close by itself. </p></body></html>");
             
             // Give browser time to receive the response and user time to read TFT message
             delay(3000);
@@ -192,9 +193,9 @@ void device_setup() {
     tft.fillScreen(TFT_BLACK);
     tft.setTextColor(TFT_WHITE);
     tft.setTextDatum(MC_DATUM);
-    tft.setTextSize(2);
+    tft.setTextSize(3);
     tft.drawString("Setup Mode", centerX, centerY - 30);
-    tft.setTextSize(1);
+    tft.setTextSize(2);
     tft.drawString("Connect to WiFi:", centerX, centerY);
     tft.drawString(SETUP_AP_NAME, centerX, centerY + 20);
     tft.drawString("Password: " + setupPassword, centerX, centerY + 40);
@@ -235,40 +236,40 @@ void device_setup() {
 }
 
 void stopSetupServer() {
-  setupServer.stop();
-  dnsServer.stop();
-  WiFi.softAPdisconnect(true);
-  setupMode = false;
+    setupServer.stop();
+    dnsServer.stop();
+    WiFi.softAPdisconnect(true);
+    setupMode = false;
 }
 
 String generateRandomPassword(int length) {
     const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     String result = "";
-    
+
     // Use hardware random number generator for better randomness
     randomSeed(esp_random());
-    
+
     for (int i = 0; i < length; i++) {
-      result += charset[random(0, sizeof(charset) - 1)];
+        result += charset[random(0, sizeof(charset) - 1)];
     }
-    
+
     return result;
-  }
+}
 
 bool isSetupMode() {
-  return setupMode;
+    return setupMode;
 }
 
 void handleSetupRequests() {
-  dnsServer.processNextRequest();
-  setupServer.handleClient();
+    dnsServer.processNextRequest();
+    setupServer.handleClient();
 }
 
 void saveDeviceSettings(const String& name, const String& owner) {
-  // Save device info to NVS
-  NVS.setString("device_name", name);
-  NVS.setString("device_owner", owner);
-  Serial.println("Device settings saved:");
-  Serial.println("Name: " + name);
-  Serial.println("Owner: " + owner);
+    // Save device info to NVS
+    NVS.setString("device_name", name);
+    NVS.setString("device_owner", owner);
+    Serial.println("Device settings saved:");
+    Serial.println("Name: " + name);
+    Serial.println("Owner: " + owner);
 }

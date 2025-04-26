@@ -1,5 +1,6 @@
 #include "loop.hpp"
-#include "ui/friendUI.hpp"  // Add the missing include for FriendRequestNotifier
+#include "ui/friendUI.hpp"
+#include "ui/blockedDeviceManager.hpp"  // Add include for the blocked device manager
 
 // Global variables needed for state management
 static unsigned long lastBroadcast = 0;
@@ -7,6 +8,8 @@ static unsigned long lastReset = 0;
 static unsigned long lastCleanup = 0;
 static unsigned long lastButtonPress = 0;
 static int friendActionOption = 0;
+static int selectedBlockedDeviceIndex = 0; // Renamed for consistency
+static int blockedDeviceActionOption = 0; // Added this missing variable
 static const int BUTTON_DEBOUNCE = 200; // ms
 
 void loop() {
@@ -48,6 +51,12 @@ void handleButtonPress(bool button1Pressed, bool button2Pressed) {
     case PENDING_REQUESTS:
       handlePendingRequestsState(button1Pressed, button2Pressed);
       break;
+    case BLOCKED_DEVICES_LIST:
+      handleBlockedDevicesListState(button1Pressed, button2Pressed);
+      break;
+    case BLOCKED_DEVICE_ACTION:
+      handleBlockedDeviceActionState(button1Pressed, button2Pressed);
+      break;
   }
 }
 
@@ -59,7 +68,7 @@ void handleDiscoveryState(bool button1Pressed, bool button2Pressed) {
       // Enter selection mode
       currentState = DEVICE_SELECTION;
       selectedDeviceIndex = 0;
-      drawDiscoveryScreenWithSelection(tft, device.device_name, devices, selectedDeviceIndex);
+      drawDiscoveryScreenWithSelection(tft, dapup.getDeviceName(), devices, selectedDeviceIndex);
     }
   }
   
@@ -73,7 +82,7 @@ void handleDeviceSelectionState(bool button1Pressed, bool button2Pressed) {
     // Navigate through device list
     if (!devices.empty()) {
       selectedDeviceIndex = (selectedDeviceIndex + 1) % devices.size();
-      drawDiscoveryScreenWithSelection(tft, device.device_name, devices, selectedDeviceIndex);
+      drawDiscoveryScreenWithSelection(tft, dapup.getDeviceName(), devices, selectedDeviceIndex);
     }
   }
   
@@ -83,7 +92,9 @@ void handleDeviceSelectionState(bool button1Pressed, bool button2Pressed) {
       selectedDevice = devices[selectedDeviceIndex];
       currentState = FRIEND_ACTION_MENU;
       friendActionOption = 0;
-      drawFriendActionMenu(tft, selectedDevice, friendActionOption);
+      // Add the missing isBlocked parameter
+      bool isBlocked = blockedDeviceManager.isDeviceBlocked(selectedDevice.macAddr);
+      drawFriendActionMenu(tft, selectedDevice, friendActionOption, isBlocked);
     }
   }
 }
@@ -92,104 +103,144 @@ void handleFriendActionMenuState(bool button1Pressed, bool button2Pressed) {
   const auto& devices = dapup.getDiscoveredDevices();
   
   if (button1Pressed) {
-    // Navigate through friend action options
-    friendActionOption = (friendActionOption + 1) % 3;
-    drawFriendActionMenu(tft, selectedDevice, friendActionOption);
+    // Navigate through friend action options - add extra option for blocking
+    int maxOptions = 3;
+    
+    // Check if device is already blocked
+    bool isBlocked = blockedDeviceManager.isDeviceBlocked(selectedDevice.macAddr);
+    if (isBlocked) {
+      // If blocked, show: 1. Unblock, 2. Back
+      maxOptions = 2;
+    }
+    
+    friendActionOption = (friendActionOption + 1) % maxOptions;
+    drawFriendActionMenu(tft, selectedDevice, friendActionOption, isBlocked);
   }
   
   if (button2Pressed) {
     uint8_t friendStatus = friendManager.getFriendStatus(selectedDevice.macAddr);
+    bool isBlocked = blockedDeviceManager.isDeviceBlocked(selectedDevice.macAddr);
     
-    if (friendStatus == FRIEND_STATUS_NONE) {
+    if (isBlocked) {
+      // Device is blocked, handle unblock action
       if (friendActionOption == 0) {
-        // Send friend request
-        if (friendManager.sendFriendRequest(selectedDevice)) {
-          // Show confirmation toast
-          showToast("Friend request sent!", TFT_DARKGREEN);
+        // Unblock device
+        if (blockedDeviceManager.unblockDevice(selectedDevice.macAddr)) {
+          showToast("Device unblocked", TFT_DARKGREEN);
         }
-        // Return to discovery mode
         currentState = DISCOVERY_SCREEN;
-        drawDiscoveryScreen(tft, device.device_name, devices);
-      } 
-      else if (friendActionOption == 1) {
-        // Block device - implement if needed
-        // ...
-        currentState = DISCOVERY_SCREEN;
-        drawDiscoveryScreen(tft, device.device_name, devices);
-      }
-      else if (friendActionOption == 2) {
+        drawDiscoveryScreen(tft, dapup.getDeviceName(), devices);
+      } else {
         // Back to device selection
         currentState = DEVICE_SELECTION;
-        drawDiscoveryScreenWithSelection(tft, device.device_name, devices, selectedDeviceIndex);
+        drawDiscoveryScreenWithSelection(tft, dapup.getDeviceName(), devices, selectedDeviceIndex);
       }
-    }
-    else if (friendStatus == FRIEND_STATUS_REQUEST_SENT) {
-      if (friendActionOption == 0) {
-        // Cancel request
-        if (friendManager.declineFriendRequest(selectedDevice)) {
-          showToast("Friend request canceled!", TFT_DARKGREY);
+    } else {
+      // Regular device (not blocked)
+      if (friendStatus == FRIEND_STATUS_NONE) {
+        if (friendActionOption == 0) {
+          // Send friend request
+          if (friendManager.sendFriendRequest(selectedDevice)) {
+            // Show confirmation toast
+            showToast("Friend request sent!", TFT_DARKGREEN);
+          }
+          // Return to discovery mode
+          currentState = DISCOVERY_SCREEN;
+          drawDiscoveryScreen(tft, dapup.getDeviceName(), devices);
+        } 
+        else if (friendActionOption == 1) {
+          // Block device
+          if (blockedDeviceManager.blockDevice(selectedDevice)) {
+            showToast("Device blocked", TFT_DARKCYAN);
+          }
+          currentState = DISCOVERY_SCREEN;
+          drawDiscoveryScreen(tft, dapup.getDeviceName(), devices);
         }
-        currentState = DISCOVERY_SCREEN;
-        drawDiscoveryScreen(tft, device.device_name, devices);
-      }
-      else if (friendActionOption == 1) {
-        // Block device option
-        currentState = DISCOVERY_SCREEN;
-        drawDiscoveryScreen(tft, device.device_name, devices);
-      }
-      else if (friendActionOption == 2) {
-        // Back to device selection
-        currentState = DEVICE_SELECTION;
-        drawDiscoveryScreenWithSelection(tft, device.device_name, devices, selectedDeviceIndex);
-      }
-    }
-    else if (friendStatus == FRIEND_STATUS_REQUEST_RECEIVED) {
-      if (friendActionOption == 0) {
-        // Accept request
-        if (friendManager.acceptFriendRequest(selectedDevice)) {
-          showToast("Friend request accepted!", TFT_DARKGREEN);
+        else if (friendActionOption == 2) {
+          // Back to device selection
+          currentState = DEVICE_SELECTION;
+          drawDiscoveryScreenWithSelection(tft, dapup.getDeviceName(), devices, selectedDeviceIndex);
         }
-        currentState = DISCOVERY_SCREEN;
-        drawDiscoveryScreen(tft, device.device_name, devices);
-      } 
-      else if (friendActionOption == 1) {
-        // Decline request
-        if (friendManager.declineFriendRequest(selectedDevice)) {
-          showToast("Friend request declined", TFT_DARKGREY);
+      }
+      else if (friendStatus == FRIEND_STATUS_REQUEST_SENT) {
+        if (friendActionOption == 0) {
+          // Cancel request
+          if (friendManager.declineFriendRequest(selectedDevice)) {
+            showToast("Friend request canceled!", TFT_DARKGREY);
+          }
+          currentState = DISCOVERY_SCREEN;
+          drawDiscoveryScreen(tft, dapup.getDeviceName(), devices);
         }
-        currentState = DISCOVERY_SCREEN;
-        drawDiscoveryScreen(tft, device.device_name, devices);
-      }
-      else if (friendActionOption == 2) {
-        // Back to selection
-        currentState = DEVICE_SELECTION;
-        drawDiscoveryScreenWithSelection(tft, device.device_name, devices, selectedDeviceIndex);
-      }
-    }
-    else if (friendStatus == FRIEND_STATUS_ACCEPTED) {
-      if (friendActionOption == 0) {
-        // Remove friend
-        if (friendManager.declineFriendRequest(selectedDevice)) {
-          showToast("Friend removed", TFT_DARKGREY);
+        else if (friendActionOption == 1) {
+          // Block device
+          if (blockedDeviceManager.blockDevice(selectedDevice)) {
+            // Also cancel any pending friend request when blocking
+            friendManager.declineFriendRequest(selectedDevice);
+            showToast("Device blocked", TFT_DARKCYAN);
+          }
+          currentState = DISCOVERY_SCREEN;
+          drawDiscoveryScreen(tft, dapup.getDeviceName(), devices);
         }
+        else if (friendActionOption == 2) {
+          // Back to device selection
+          currentState = DEVICE_SELECTION;
+          drawDiscoveryScreenWithSelection(tft, dapup.getDeviceName(), devices, selectedDeviceIndex);
+        }
+      }
+      else if (friendStatus == FRIEND_STATUS_REQUEST_RECEIVED) {
+        // No blocking option when request is received, maintain existing functionality
+        if (friendActionOption == 0) {
+          // Accept request
+          if (friendManager.acceptFriendRequest(selectedDevice)) {
+            showToast("Friend request accepted!", TFT_DARKGREEN);
+          }
+          currentState = DISCOVERY_SCREEN;
+          drawDiscoveryScreen(tft, dapup.getDeviceName(), devices);
+        } 
+        else if (friendActionOption == 1) {
+          // Decline request
+          if (friendManager.declineFriendRequest(selectedDevice)) {
+            showToast("Friend request declined", TFT_DARKGREY);
+          }
+          currentState = DISCOVERY_SCREEN;
+          drawDiscoveryScreen(tft, dapup.getDeviceName(), devices);
+        }
+        else if (friendActionOption == 2) {
+          // Back to selection
+          currentState = DEVICE_SELECTION;
+          drawDiscoveryScreenWithSelection(tft, dapup.getDeviceName(), devices, selectedDeviceIndex);
+        }
+      }
+      else if (friendStatus == FRIEND_STATUS_ACCEPTED) {
+        if (friendActionOption == 0) {
+          // Remove friend
+          if (friendManager.declineFriendRequest(selectedDevice)) {
+            showToast("Friend removed", TFT_DARKGREY);
+          }
+          currentState = DISCOVERY_SCREEN;
+          drawDiscoveryScreen(tft, dapup.getDeviceName(), devices);
+        }
+        else if (friendActionOption == 1) {
+          // Block device
+          if (blockedDeviceManager.blockDevice(selectedDevice)) {
+            // Also remove friend status when blocking
+            friendManager.declineFriendRequest(selectedDevice);
+            showToast("Device blocked", TFT_DARKCYAN);
+          }
+          currentState = DISCOVERY_SCREEN;
+          drawDiscoveryScreen(tft, dapup.getDeviceName(), devices);
+        }
+        else if (friendActionOption == 2) {
+          // Back to device selection
+          currentState = DEVICE_SELECTION;
+          drawDiscoveryScreenWithSelection(tft, dapup.getDeviceName(), devices, selectedDeviceIndex);
+        }
+      }
+      else {
+        // Default - go back to discovery
         currentState = DISCOVERY_SCREEN;
-        drawDiscoveryScreen(tft, device.device_name, devices);
+        drawDiscoveryScreen(tft, dapup.getDeviceName(), devices);
       }
-      else if (friendActionOption == 1) {
-        // Block device option
-        currentState = DISCOVERY_SCREEN;
-        drawDiscoveryScreen(tft, device.device_name, devices);
-      }
-      else if (friendActionOption == 2) {
-        // Back to device selection
-        currentState = DEVICE_SELECTION;
-        drawDiscoveryScreenWithSelection(tft, device.device_name, devices, selectedDeviceIndex);
-      }
-    }
-    else {
-      // Default - go back to discovery
-      currentState = DISCOVERY_SCREEN;
-      drawDiscoveryScreen(tft, device.device_name, devices);
     }
   }
 }
@@ -219,7 +270,8 @@ void handleFriendRequestState(bool button1Pressed, bool button2Pressed) {
     
     // For all options, return to discovery mode
     currentState = DISCOVERY_SCREEN;
-    drawDiscoveryScreen(tft, device.device_name, devices);
+    const auto& devices = dapup.getDiscoveredDevices();
+    drawDiscoveryScreen(tft, dapup.getDeviceName(), devices);
   }
 }
 
@@ -239,7 +291,7 @@ void handlePendingRequestsState(bool button1Pressed, bool button2Pressed) {
   if (pendingRequests.empty()) {
     currentState = DISCOVERY_SCREEN;
     const auto& devices = dapup.getDiscoveredDevices();
-    drawDiscoveryScreen(tft, device.device_name, devices);
+    drawDiscoveryScreen(tft, dapup.getDeviceName(), devices);
     return;
   }
   
@@ -282,27 +334,109 @@ void handlePendingRequestsState(bool button1Pressed, bool button2Pressed) {
         // Return to discovery screen
         currentState = DISCOVERY_SCREEN;
         const auto& devices = dapup.getDiscoveredDevices();
-        drawDiscoveryScreen(tft, device.device_name, devices);
+        drawDiscoveryScreen(tft, dapup.getDeviceName(), devices);
       }
     } else {
       // No pending requests, return to discovery
       currentState = DISCOVERY_SCREEN;
       const auto& devices = dapup.getDiscoveredDevices();
-      drawDiscoveryScreen(tft, device.device_name, devices);
+      drawDiscoveryScreen(tft, dapup.getDeviceName(), devices);
     }
   }
 }
 
-// Helper function to show toast messages
-void showToast(const String& message, uint16_t bgColor) {
-  int centerX = tft.width() / 2;
-  int currentY = tft.height() / 2;
-  tft.fillRoundRect(centerX - 100, currentY - 15, 200, 30, 5, bgColor);
-  tft.setTextDatum(MC_DATUM);
-  tft.setTextSize(1);
-  tft.setTextColor(TFT_WHITE);
-  tft.drawString(message, centerX, currentY);
-  delay(1000);
+// Handler for the blocked devices list screen
+void handleBlockedDevicesListState(bool button1Pressed, bool button2Pressed) {
+  const auto& blockedDevices = blockedDeviceManager.getBlockedDevices();
+  
+  if (blockedDevices.empty()) {
+    // If there are no blocked devices, return to the discovery screen
+    currentState = DISCOVERY_SCREEN;
+    const auto& devices = dapup.getDiscoveredDevices();
+    drawDiscoveryScreen(tft, dapup.getDeviceName(), devices);
+    return;
+  }
+  
+  if (button1Pressed) {
+    // Navigate to the next blocked device in the list
+    selectedBlockedDeviceIndex = (selectedBlockedDeviceIndex + 1) % blockedDevices.size();
+    drawBlockedDevicesList(tft, blockedDevices, selectedBlockedDeviceIndex);
+  }
+  
+  if (button2Pressed) {
+    // Show actions for the selected blocked device
+    currentState = BLOCKED_DEVICE_ACTION;
+    blockedDeviceActionOption = 0; // Reset to first option (Unblock)
+    
+    // Get the blocked device and pass it to the menu
+    const BlockedDevice* devicePtr = blockedDeviceManager.getBlockedDeviceByIndex(selectedBlockedDeviceIndex);
+    if (devicePtr) {
+      // Pass the pointer directly without dereferencing
+      drawBlockedDeviceActionMenu(tft, devicePtr, blockedDeviceActionOption);
+    } else {
+      // Fallback if device not found
+      currentState = BLOCKED_DEVICES_LIST;
+      drawBlockedDevicesList(tft, blockedDevices, selectedBlockedDeviceIndex);
+    }
+  }
+}
+
+// Handler for the blocked device action menu (unblock/cancel)
+void handleBlockedDeviceActionState(bool button1Pressed, bool button2Pressed) {
+  const auto& blockedDevices = blockedDeviceManager.getBlockedDevices();
+  if (selectedBlockedDeviceIndex >= blockedDevices.size()) {
+    // Safety check - if the index is invalid, go back to the blocked devices list
+    currentState = BLOCKED_DEVICES_LIST;
+    selectedBlockedDeviceIndex = 0;
+    drawBlockedDevicesList(tft, blockedDevices, selectedBlockedDeviceIndex);
+    return;
+  }
+  
+  // Get pointer to the blocked device
+  const BlockedDevice* devicePtr = blockedDeviceManager.getBlockedDeviceByIndex(selectedBlockedDeviceIndex);
+  if (!devicePtr) {
+    // If device not found, go back to list
+    currentState = BLOCKED_DEVICES_LIST;
+    drawBlockedDevicesList(tft, blockedDevices, selectedBlockedDeviceIndex);
+    return;
+  }
+  
+  if (button1Pressed) {
+    // Toggle between Unblock (0) and Cancel (1)
+    blockedDeviceActionOption = blockedDeviceActionOption == 0 ? 1 : 0;
+    // Pass the pointer directly without dereferencing
+    drawBlockedDeviceActionMenu(tft, devicePtr, blockedDeviceActionOption);
+  }
+  
+  if (button2Pressed) {
+    if (blockedDeviceActionOption == 0) {
+      // Unblock the device
+      blockedDeviceManager.unblockDevice(devicePtr->macAddr);
+      
+      // Show toast message
+      char toastMessage[128];
+      snprintf(toastMessage, sizeof(toastMessage), "Unblocked %s", devicePtr->deviceName.c_str());
+      showToast(toastMessage, TFT_DARKGREEN);
+      
+      // Go back to the blocked devices list or discovery if no more blocked devices
+      currentState = blockedDeviceManager.getBlockedDevices().empty() ? DISCOVERY_SCREEN : BLOCKED_DEVICES_LIST;
+      
+      if (currentState == DISCOVERY_SCREEN) {
+        const auto& devices = dapup.getDiscoveredDevices();
+        drawDiscoveryScreen(tft, dapup.getDeviceName(), devices);
+      } else {
+        // If there are still blocked devices, ensure the index is valid
+        const auto& remainingBlockedDevices = blockedDeviceManager.getBlockedDevices();
+        selectedBlockedDeviceIndex = std::min(selectedBlockedDeviceIndex, 
+                                           static_cast<int>(remainingBlockedDevices.size() - 1));
+        drawBlockedDevicesList(tft, remainingBlockedDevices, selectedBlockedDeviceIndex);
+      }
+    } else {
+      // Cancel - go back to the blocked devices list
+      currentState = BLOCKED_DEVICES_LIST;
+      drawBlockedDevicesList(tft, blockedDevices, selectedBlockedDeviceIndex);
+    }
+  }
 }
 
 void performPeriodicTasks() {
@@ -329,7 +463,7 @@ void performPeriodicTasks() {
     
     // Update display based on current UI state
     if (currentState == DISCOVERY_SCREEN) {
-      drawDiscoveryScreen(tft, device.device_name, devices);
+      drawDiscoveryScreen(tft, dapup.getDeviceName(), devices);
       
       // If we have pending requests and it's time to show a notification, show it
       if (FriendRequestNotifier::shouldShowNotification()) {
@@ -340,7 +474,7 @@ void performPeriodicTasks() {
         showToast("You have friend requests!", TFT_BLUE);
         
         // After toast disappears, redraw the screen with just the indicator
-        drawDiscoveryScreen(tft, device.device_name, devices);
+        drawDiscoveryScreen(tft, dapup.getDeviceName(), devices);
         FriendRequestNotifier::drawNotificationIndicator(tft);
       }
       // If we just have the indicator flag without the toast timing, just draw the indicator
@@ -355,7 +489,7 @@ void performPeriodicTasks() {
         selectedDeviceIndex = devices.size() - 1;
         if (selectedDeviceIndex < 0) selectedDeviceIndex = 0;
       }
-      drawDiscoveryScreenWithSelection(tft, device.device_name, devices, selectedDeviceIndex);
+      drawDiscoveryScreenWithSelection(tft, dapup.getDeviceName(), devices, selectedDeviceIndex);
       
       // Also show notification indicator if needed
       if (FriendRequestNotifier::getNewRequestFlag()) {
@@ -377,7 +511,7 @@ void performPeriodicTasks() {
     
     // Only update the display if we're in discovery mode
     if (currentState == DISCOVERY_SCREEN) {
-      drawDiscoveryScreen(tft, device.device_name, devices);
+      drawDiscoveryScreen(tft, dapup.getDeviceName(), devices);
       
       // Also show notification indicator if needed
       if (FriendRequestNotifier::getNewRequestFlag()) {
@@ -399,7 +533,7 @@ void performPeriodicTasks() {
       showToast("Saved " + String(storedCount) + " devices", TFT_DARKGREY);
       
       // Redraw the current device list
-      drawDiscoveryScreen(tft, device.device_name, devices);
+      drawDiscoveryScreen(tft, dapup.getDeviceName(), devices);
       
       // Also show notification indicator if needed
       if (FriendRequestNotifier::getNewRequestFlag()) {
@@ -672,6 +806,18 @@ void handleSerialCommands() {
       Serial.println("Unknown command. Type 'help' for available commands.");
     }
   }
+}
+
+// Helper function to show toast messages
+void showToast(const String& message, uint16_t bgColor) {
+  int centerX = tft.width() / 2;
+  int currentY = tft.height() / 2;
+  tft.fillRoundRect(centerX - 100, currentY - 15, 200, 30, 5, bgColor);
+  tft.setTextDatum(MC_DATUM);
+  tft.setTextSize(1);
+  tft.setTextColor(TFT_WHITE);
+  tft.drawString(message, centerX, currentY);
+  delay(1000);
 }
 
 // Helper function to list discovered devices with indices

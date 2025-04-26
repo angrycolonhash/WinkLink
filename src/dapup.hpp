@@ -59,7 +59,6 @@ public:
     
     // Initialize the protocol
     bool begin(const char* ownerName, const char* deviceName);
-
     
     // Broadcast own information
     bool broadcast();
@@ -74,6 +73,12 @@ public:
     void cleanOldDevices(unsigned long maxAge);
 
     void clearDiscoveredDevices();
+    
+    // Get the device name
+    const char* getDeviceName() const { return myDeviceName; }
+    
+    // Get the owner name
+    const char* getOwnerName() const { return myOwnerName; }
 };
 
 #endif // DAPUP_HPP

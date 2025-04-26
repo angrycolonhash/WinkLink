@@ -1,4 +1,6 @@
 #include "drawing.hpp"
+#include "ui/friendRequest.hpp"
+#include "other.hpp"  // Include other.hpp which has the extern declaration for friendManager
 
 void drawWiFiSymbol(TFT_eSPI &tft, int centerX, int centerY, int size, uint16_t color) {
     // Center dot
@@ -135,6 +137,141 @@ void drawDiscoveryScreen(TFT_eSPI &tft, const String &deviceName, const std::vec
     // Draw device count on right
     tft.setTextDatum(MR_DATUM); // Middle-Right
     tft.drawString("Devices: " + String(devices.size()), tft.width() - 5, tft.height() - barHeight/2);
+}
+
+void drawFriendActionMenu(TFT_eSPI& tft, const DiscoveredDevice& device, int selectedOption, bool isBlocked) {
+  // Clear screen
+  tft.fillScreen(TFT_BLACK);
+  
+  // Draw header
+  tft.setTextColor(TFT_WHITE);
+  tft.setTextSize(2);
+  tft.setCursor(10, 10);
+  tft.print("Device Actions");
+  
+  // Draw device name
+  tft.setTextSize(1);
+  tft.setCursor(10, 40);
+  tft.print("Name: ");
+  tft.print(device.deviceName);
+  
+  // Draw device MAC
+  char macStr[18];
+  snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
+           device.macAddr[0], device.macAddr[1], device.macAddr[2],
+           device.macAddr[3], device.macAddr[4], device.macAddr[5]);
+  tft.setCursor(10, 55);
+  tft.print("MAC: ");
+  tft.print(macStr);
+  
+  // Draw Menu Options
+  tft.setTextSize(2);
+  
+  uint8_t friendStatus = friendManager.getFriendStatus(device.macAddr);
+  
+  if (isBlocked) {
+    // If device is blocked, only show unblock and back options
+    tft.setCursor(20, 90);
+    tft.setTextColor(selectedOption == 0 ? TFT_GREEN : TFT_WHITE);
+    tft.print("Unblock Device");
+    
+    tft.setCursor(20, 120);
+    tft.setTextColor(selectedOption == 1 ? TFT_GREEN : TFT_WHITE);
+    tft.print("Back");
+  } else {
+    // Show appropriate options based on friend status
+    if (friendStatus == FRIEND_STATUS_NONE) {
+      tft.setCursor(20, 90);
+      tft.setTextColor(selectedOption == 0 ? TFT_GREEN : TFT_WHITE);
+      tft.print("Send Friend Request");
+      
+      tft.setCursor(20, 120);
+      tft.setTextColor(selectedOption == 1 ? TFT_GREEN : TFT_WHITE);
+      tft.print("Block Device");
+      
+      tft.setCursor(20, 150);
+      tft.setTextColor(selectedOption == 2 ? TFT_GREEN : TFT_WHITE);
+      tft.print("Back");
+    }
+    else if (friendStatus == FRIEND_STATUS_REQUEST_SENT) {
+      tft.setCursor(20, 90);
+      tft.setTextColor(selectedOption == 0 ? TFT_GREEN : TFT_WHITE);
+      tft.print("Cancel Request");
+      
+      tft.setCursor(20, 120);
+      tft.setTextColor(selectedOption == 1 ? TFT_GREEN : TFT_WHITE);
+      tft.print("Block Device");
+      
+      tft.setCursor(20, 150);
+      tft.setTextColor(selectedOption == 2 ? TFT_GREEN : TFT_WHITE);
+      tft.print("Back");
+    }
+    else if (friendStatus == FRIEND_STATUS_REQUEST_RECEIVED) {
+      tft.setCursor(20, 90);
+      tft.setTextColor(selectedOption == 0 ? TFT_GREEN : TFT_WHITE);
+      tft.print("Accept Request");
+      
+      tft.setCursor(20, 120);
+      tft.setTextColor(selectedOption == 1 ? TFT_GREEN : TFT_WHITE);
+      tft.print("Decline Request");
+      
+      tft.setCursor(20, 150);
+      tft.setTextColor(selectedOption == 2 ? TFT_GREEN : TFT_WHITE);
+      tft.print("Back");
+    }
+    else if (friendStatus == FRIEND_STATUS_ACCEPTED) {
+      tft.setCursor(20, 90);
+      tft.setTextColor(selectedOption == 0 ? TFT_GREEN : TFT_WHITE);
+      tft.print("Remove Friend");
+      
+      tft.setCursor(20, 120);
+      tft.setTextColor(selectedOption == 1 ? TFT_GREEN : TFT_WHITE);
+      tft.print("Block Device");
+      
+      tft.setCursor(20, 150);
+      tft.setTextColor(selectedOption == 2 ? TFT_GREEN : TFT_WHITE);
+      tft.print("Back");
+    }
+  }
+  
+  // Draw instructions
+  tft.setTextSize(1);
+  tft.setTextColor(TFT_LIGHTGREY);
+  tft.setCursor(10, 220);
+  tft.print("Button 1: Change Option");
+  tft.setCursor(10, 235);
+  tft.print("Button 2: Select");
+}
+
+void drawDiscoveryScreenWithSelection(TFT_eSPI &tft, const String &deviceName, const std::vector<DiscoveredDevice> &devices, int selectedIndex) {
+    // Start with the regular discovery screen
+    drawDiscoveryScreen(tft, deviceName, devices);
+    
+    // If there are devices and a valid selected index, highlight the selection
+    if (!devices.empty() && selectedIndex >= 0 && selectedIndex < (int)devices.size()) {
+        const int startY = 40;
+        const int lineHeight = 20;
+        
+        // Calculate y-position for the selection
+        int y = startY + (selectedIndex * lineHeight);
+        
+        // Draw a highlight rectangle around the selected item
+        tft.drawRect(3, y - lineHeight/2 + 3, tft.width() - 6, lineHeight - 3, TFT_GREEN);
+        
+        // Draw selection indicator
+        tft.fillTriangle(
+            5, y,
+            10, y - 5,
+            10, y + 5,
+            TFT_GREEN
+        );
+    }
+    
+    // Add selection instructions at the bottom
+    tft.setTextDatum(BC_DATUM); // Bottom-Center
+    tft.setTextSize(1);
+    tft.setTextColor(TFT_LIGHTGREY);
+    tft.drawString("BTN1: Next | BTN2: Select", tft.width()/2, tft.height() - 25);
 }
 
 ProgressBar::ProgressBar(TFT_eSPI &tft, int x, int y, int width, int height, uint16_t borderColor, uint16_t barColor, uint16_t bgColor) 
