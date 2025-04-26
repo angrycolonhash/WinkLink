@@ -9,23 +9,26 @@
 
 // Maximum length for device owner name
 #define MAX_OWNER_NAME_LENGTH 20
+#define MAX_DEVICE_NAME_LENGTH 32
 
-// Structure to hold discovered device information
+// Update the DiscoveredDevice struct definition
 struct DiscoveredDevice {
-    uint8_t macAddr[6];
-    char ownerName[MAX_OWNER_NAME_LENGTH];
-    time_t lastSeen;
+    uint8_t macAddr[6];                           
+    char ownerName[MAX_OWNER_NAME_LENGTH];        
+    char deviceName[MAX_DEVICE_NAME_LENGTH];      
+    unsigned long lastSeen;                       
     
-    // Equality operator for finding duplicates
+    // Equality operator
     bool operator==(const DiscoveredDevice& other) const {
         return memcmp(macAddr, other.macAddr, 6) == 0;
     }
 };
-
 class DapUpProtocol {
 private:
     std::vector<DiscoveredDevice> discoveredDevices;
+    char myDeviceName[MAX_DEVICE_NAME_LENGTH];
     char myOwnerName[MAX_OWNER_NAME_LENGTH];
+
     uint8_t broadcastAddress[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}; // Broadcast to all
     
     // Callback for when data is sent
@@ -41,7 +44,8 @@ public:
     DapUpProtocol();
     
     // Initialize the protocol
-    bool begin(const char* ownerName);
+    bool begin(const char* ownerName, const char* deviceName);
+
     
     // Broadcast own information
     bool broadcast();

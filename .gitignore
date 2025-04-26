@@ -3,3 +3,4 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+!.pio/libdeps/upesy_wroom/TFT_eSPI/User_Setup.h

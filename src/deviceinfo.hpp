@@ -5,54 +5,6 @@
 #include <ArduinoNvs.h>
 #include <TFT_eSPI.h>
 
-void factoryReset() {
-    // First, back up the serial number
-    String serialNumber = "";
-    if (NVS.getString("serial_num").length() > 0) {
-        serialNumber = NVS.getString("serial_num");
-        Serial.println("Preserving serial number: " + serialNumber);
-    }
-
-    // Show reset message on display
-    tft.fillScreen(TFT_BLACK);
-    tft.setTextColor(TFT_RED);
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextSize(2);
-    tft.drawString("FACTORY RESET", tft.width()/2, tft.height()/2 - 30);
-    tft.setTextSize(1);
-    tft.setTextColor(TFT_WHITE);
-    tft.drawString("Erasing all settings", tft.width()/2, tft.height()/2);
-    tft.drawString("Device will restart", tft.width()/2, tft.height()/2 + 20);
-
-    // Clear NVS completely (most thorough approach)
-    NVS.eraseAll();
-
-    // If we had a serial number, restore it
-    if (serialNumber.length() > 0) {
-        NVS.setString("serial_num", serialNumber);
-    }
-
-    // Show countdown
-    for (int i = 3; i > 0; i--) {
-        tft.fillRect(0, tft.height()/2 + 40, tft.width(), 30, TFT_BLACK);
-        tft.setTextSize(2);
-        tft.setTextColor(TFT_YELLOW);
-        tft.drawString("Restarting in " + String(i), tft.width()/2, tft.height()/2 + 40);
-        delay(1000);
-    }
-
-    // Final message
-    tft.fillScreen(TFT_BLACK);
-    tft.setTextSize(2);
-    tft.setTextColor(TFT_WHITE);
-    tft.drawString("Rebooting...", tft.width()/2, tft.height()/2);
-
-    // Reset the device
-    Serial.println("Factory reset complete. Restarting...");
-    delay(1000);
-    ESP.restart();
-}
-
 class DeviceInfo {
     public:
         String serial_num;
