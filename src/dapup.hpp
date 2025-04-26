@@ -11,6 +11,10 @@
 #define MAX_OWNER_NAME_LENGTH 20
 #define MAX_DEVICE_NAME_LENGTH 32
 
+// Forward declarations
+struct FriendInfo;
+class FriendManager;
+
 struct DiscoveredDevice {
     uint8_t macAddr[6];                           
     char ownerName[MAX_OWNER_NAME_LENGTH];        
@@ -43,6 +47,9 @@ private:
 
 public:
     DapUpProtocol();
+    
+    // Public accessor for the singleton instance
+    static DapUpProtocol* getInstance() { return instance; }
     
     // Initialize the protocol
     bool begin(const char* ownerName, const char* deviceName);

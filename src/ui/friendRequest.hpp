@@ -53,6 +53,9 @@ public:
     
     // Update friend's last seen timestamp
     void updateFriendLastSeen(const uint8_t* macAddr);
+    
+    // Add a friend directly to the friends list
+    bool addFriend(const FriendInfo& friend_info);
 };
 
 #endif // FRIEND_REQUEST_HPP
