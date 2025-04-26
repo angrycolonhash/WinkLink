@@ -113,6 +113,20 @@ bool DapUpProtocol::broadcast() {
     
     // Send individual messages to each discovered device with the appropriate friend status
     for (const auto& device : devices) {
+        // Skip sending direct messages to devices we've blocked (one-way blocking)
+        // This means we can still see them, but they won't see us
+        if (blockedDeviceManager.isDeviceBlocked(device.macAddr)) {
+            if (debugLoggingEnabled) {
+                char macStr[18];
+                snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
+                         device.macAddr[0], device.macAddr[1], device.macAddr[2],
+                         device.macAddr[3], device.macAddr[4], device.macAddr[5]);
+                Serial.printf("DEBUG: Not sending directed message to blocked device: %s - %s (%s)\n", 
+                             macStr, device.deviceName, device.ownerName);
+            }
+            continue; // Skip this device in the broadcast
+        }
+        
         // Create a device-specific info packet that includes our friend status with them
         DiscoveredDevice deviceSpecificInfo = myInfo;
         
@@ -122,7 +136,7 @@ bool DapUpProtocol::broadcast() {
         // Check if we need to send a specific message to this device
         bool sendDirectMessage = false;
         
-        // Look for the specific friend entry to check if acknowledgment is pending
+        // Look
         bool pendingAck = false;
         const auto& friendsList = friendManager.getFriendsList();
         for (const auto& friend_info : friendsList) {
@@ -201,9 +215,6 @@ bool DapUpProtocol::broadcast() {
         }
     }
     
-    // Also send a general broadcast without specific friend flags
-    myInfo.friendRequestFlag = 0;  // No friend request flag for general broadcast
-    
     // TRACE logging for broadcast data
     if (traceLoggingEnabled) {
         char macStr[18];
@@ -235,15 +246,7 @@ void DapUpProtocol::processReceivedDevice(const DiscoveredDevice& device) {
              device.macAddr[0], device.macAddr[1], device.macAddr[2], 
              device.macAddr[3], device.macAddr[4], device.macAddr[5]);
     
-    // Check if this device is blocked - if so, ignore it completely
-    if (blockedDeviceManager.isDeviceBlocked(device.macAddr)) {
-        if (debugLoggingEnabled) {
-            Serial.printf("DEBUG: Ignoring blocked device: %s - %s (%s)\n", 
-                         macStr, device.deviceName, device.ownerName);
-        }
-        return; // Skip processing this device
-    }
-    
+    // Debug logging
     if (debugLoggingEnabled) {
         Serial.printf("DEBUG: Processing received device: %s - Flag: %d\n", 
                      macStr, device.friendRequestFlag);
@@ -257,6 +260,9 @@ void DapUpProtocol::processReceivedDevice(const DiscoveredDevice& device) {
         Serial.printf("TRACE: LastSeen: %lu\n", device.lastSeen);
         Serial.printf("TRACE: Data Size: %d bytes\n", sizeof(DiscoveredDevice));
     }
+    
+    // For one-way blocking, we no longer ignore blocked devices in our incoming processing
+    // We WILL see devices we've blocked - only they can't see us (which is handled in broadcast)
     
     // Handle friend request flag
     if (device.friendRequestFlag == 1) {

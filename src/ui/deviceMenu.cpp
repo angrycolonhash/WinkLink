@@ -410,12 +410,11 @@ void drawBlockedDeviceActionMenu(TFT_eSPI &tft, const BlockedDevice* device, int
     tft.drawString("MAC: " + String(macStr), 10, y);
     y += 35;
     
-    // Draw action menu options
+    // Draw action menu options - simplified to just Unblock and Back
     const int OPTION_HEIGHT = 30;
-    const int NUM_OPTIONS = 3;
+    const int NUM_OPTIONS = 2;
     const char* options[NUM_OPTIONS] = {
         "Unblock Device",
-        "Continue to iterate?",
         "Back"
     };
     
@@ -428,6 +427,7 @@ void drawBlockedDeviceActionMenu(TFT_eSPI &tft, const BlockedDevice* device, int
     }
     
     // Draw navigation hint
+    tft.setTextDatum(BC_DATUM);
     tft.setTextDatum(BC_DATUM);
     tft.setTextColor(TFT_LIGHTGREY);
     tft.drawString("Button 1: Next | Button 2: Select", tft.width()/2, tft.height() - 5);
