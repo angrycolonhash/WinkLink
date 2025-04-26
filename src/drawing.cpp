@@ -55,9 +55,20 @@ void drawDiscoveryScreen(TFT_eSPI &tft, const String &deviceName, const std::vec
             String deviceStr = devices[i].deviceName;  // Make sure this field exists
             String ownerStr = devices[i].ownerName;
             
-            // Debug output to serial
-            Serial.printf("Device %d: Name='%s', Owner='%s'\n", 
-                        i, deviceStr.c_str(), ownerStr.c_str());
+            // Debug output to serial with additional info about rediscovered devices
+            char macStr[18];
+            snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
+                    devices[i].macAddr[0], devices[i].macAddr[1], devices[i].macAddr[2],
+                    devices[i].macAddr[3], devices[i].macAddr[4], devices[i].macAddr[5]);
+            
+            if (devices[i].ownerChanged) {
+                Serial.printf("Device %d: Name='%s', Owner='%s' (REDISCOVERED: previous owner='%s'), MAC=%s\n", 
+                              i, deviceStr.c_str(), ownerStr.c_str(), 
+                              devices[i].previousOwnerName, macStr);
+            } else {
+                Serial.printf("Device %d: Name='%s', Owner='%s', MAC=%s\n", 
+                              i, deviceStr.c_str(), ownerStr.c_str(), macStr);
+            }
             
             // Calculate width of both strings
             tft.setTextSize(1);
@@ -81,9 +92,17 @@ void drawDiscoveryScreen(TFT_eSPI &tft, const String &deviceName, const std::vec
             // Draw device name on left
             tft.drawString(deviceStr, 5, y);
             
-            // Draw owner name on right
+            // Draw owner name on right - use red color for rediscovered devices with changed owners
             tft.setTextDatum(MR_DATUM);
-            tft.setTextColor(TFT_WHITE);
+            
+            // Set color based on whether this is a rediscovered device
+            if (devices[i].ownerChanged) {
+                // Use light red color for changed owners
+                tft.setTextColor(TFT_RED);
+            } else {
+                tft.setTextColor(TFT_WHITE);
+            }
+            
             tft.drawString(ownerStr, tft.width() - 5, y);
             
             // Draw separator line

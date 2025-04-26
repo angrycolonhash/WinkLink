@@ -134,6 +134,12 @@ bool FriendManager::acceptFriendRequest(const DiscoveredDevice& device) {
         if (memcmp(friend_info.macAddr, device.macAddr, 6) == 0) {
             Serial.printf("DEBUG: Found device in friend list with status %d\n", friend_info.status);
             
+            // Skip if already accepted
+            if (friend_info.status == FRIEND_STATUS_ACCEPTED) {
+                Serial.println("DEBUG: Already friends with this device");
+                return true;
+            }
+            
             // If there's a request received, accept it
             if (friend_info.status == FRIEND_STATUS_REQUEST_RECEIVED) {
                 friend_info.status = FRIEND_STATUS_ACCEPTED;
@@ -153,14 +159,22 @@ bool FriendManager::acceptFriendRequest(const DiscoveredDevice& device) {
             // If the status is FRIEND_STATUS_REQUEST_SENT, we need to handle a special case
             // This happens when both devices send friend requests to each other
             if (friend_info.status == FRIEND_STATUS_REQUEST_SENT) {
-                Serial.println("DEBUG: Request was SENT by us but not RECEIVED. Converting to ACCEPTED.");
+                Serial.println("DEBUG: Both devices sent friend requests to each other. Converting to ACCEPTED.");
                 friend_info.status = FRIEND_STATUS_ACCEPTED;
                 friend_info.lastSeen = millis();
+                
+                // Update names in case they changed
+                strncpy(friend_info.ownerName, device.ownerName, MAX_OWNER_NAME_LENGTH);
+                friend_info.ownerName[MAX_OWNER_NAME_LENGTH-1] = '\0';
+                strncpy(friend_info.deviceName, device.deviceName, MAX_DEVICE_NAME_LENGTH);
+                friend_info.deviceName[MAX_DEVICE_NAME_LENGTH-1] = '\0';
+                
                 saveFriends();
+                Serial.println("DEBUG: Successfully converted mutual requests to accepted");
                 return true;
             }
             
-            Serial.println("DEBUG: No pending request to accept");
+            Serial.println("DEBUG: No valid request to accept");
             return false; // No pending request to accept
         }
     }

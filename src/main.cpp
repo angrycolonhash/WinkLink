@@ -37,8 +37,3 @@ void setup() {
   centerY = tft.height() / 2;
 }
 
-// The main loop is defined in loop.cpp
-// void loop() {
-//   // Implementation is in loop.cpp
-// }
-

@@ -141,8 +141,12 @@ void drawDiscoveryScreenWithSelection(TFT_eSPI &tft, const String &deviceName,
         int y = startY + (selectedIndex * lineHeight);
         int width = tft.width() - 10;
         
-        // Draw highlight rectangle
-        tft.fillRect(5, y - lineHeight/2 + 2, width, lineHeight, TFT_DARKGREY);
+        // Draw highlight rectangle - use dark red for devices with changed owners
+        if (devices[selectedIndex].ownerChanged) {
+            tft.fillRect(5, y - lineHeight/2 + 2, width, lineHeight, TFT_DARKRED);
+        } else {
+            tft.fillRect(5, y - lineHeight/2 + 2, width, lineHeight, TFT_DARKGREY);
+        }
         
         // Redraw the device text in white
         tft.setTextDatum(ML_DATUM);

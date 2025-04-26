@@ -136,6 +136,22 @@ bool DapUpProtocol::broadcast() {
             // Send direct message to this specific device
             uint8_t specificAddr[6];
             memcpy(specificAddr, device.macAddr, 6);
+            
+            // Register the peer if not already registered
+            esp_now_peer_info_t peerInfo = {};
+            memcpy(peerInfo.peer_addr, specificAddr, 6);
+            peerInfo.channel = 0;
+            peerInfo.encrypt = false;
+            
+            // First check if peer exists, if not add it
+            if (esp_now_is_peer_exist(specificAddr) == false) {
+                if (esp_now_add_peer(&peerInfo) != ESP_OK) {
+                    Serial.printf("Failed to add peer %s\n", macStr);
+                    continue; // Skip this peer if we can't add it
+                }
+                Serial.printf("Added peer %s\n", macStr);
+            }
+            
             esp_err_t result = esp_now_send(specificAddr, (uint8_t*)&deviceSpecificInfo, sizeof(DiscoveredDevice));
             
             if (result != ESP_OK) {
@@ -177,19 +193,22 @@ void DapUpProtocol::processReceivedDevice(const DiscoveredDevice& device) {
         Serial.printf("DEBUG: Current status with this device: %d\n", currentStatus);
         
         // Handle based on existing status
-        if (currentStatus == 0) {  // FRIEND_STATUS_NONE = 0
-            // Find the device in our discovered devices to process the request
-            for (const auto& discoveredDevice : discoveredDevices) {
-                if (memcmp(discoveredDevice.macAddr, device.macAddr, 6) == 0) {
-                    // Create friend request entry and accept it
-                    friendManager.sendFriendRequest(discoveredDevice);
-                    friendManager.acceptFriendRequest(discoveredDevice);
-                    Serial.println("DEBUG: Created and accepted new friend request");
-                    break;
-                }
-            }
+        if (currentStatus == FRIEND_STATUS_NONE) {
+            // Create a new friend request entry with RECEIVED status
+            FriendInfo newFriend;
+            memcpy(newFriend.macAddr, device.macAddr, 6);
+            strncpy(newFriend.ownerName, device.ownerName, MAX_OWNER_NAME_LENGTH);
+            newFriend.ownerName[MAX_OWNER_NAME_LENGTH-1] = '\0';
+            strncpy(newFriend.deviceName, device.deviceName, MAX_DEVICE_NAME_LENGTH);
+            newFriend.deviceName[MAX_DEVICE_NAME_LENGTH-1] = '\0';
+            newFriend.status = FRIEND_STATUS_REQUEST_RECEIVED;
+            newFriend.lastSeen = millis();
+            
+            // Add the friend to our list
+            friendManager.addFriend(newFriend);
+            Serial.println("DEBUG: Added new friend request with REQUEST_RECEIVED status");
         }
-        else if (currentStatus == 1) {  // FRIEND_STATUS_REQUEST_SENT = 1
+        else if (currentStatus == FRIEND_STATUS_REQUEST_SENT) {
             // If we also sent a request to them, automatically accept as a mutual request
             Serial.println("DEBUG: Mutual friend requests detected, automatically accepting");
             
@@ -202,12 +221,27 @@ void DapUpProtocol::processReceivedDevice(const DiscoveredDevice& device) {
                 }
             }
         }
+        // Do nothing if we are already friends or have already received a request
     }
     
     // Check if we already have this device in our discovered devices list
     bool deviceUpdated = false;
     for (auto& existingDevice : discoveredDevices) {
         if (existingDevice == device) {
+            // Check if owner name has changed
+            if (strcmp(existingDevice.ownerName, device.ownerName) != 0) {
+                // Owner name has changed - this is a rediscovered device with a different owner
+                Serial.printf("REDISCOVERED: Device %s changed owner from '%s' to '%s'\n", 
+                             macStr, existingDevice.ownerName, device.ownerName);
+                
+                // Store the previous owner name
+                strncpy(existingDevice.previousOwnerName, existingDevice.ownerName, MAX_OWNER_NAME_LENGTH);
+                existingDevice.previousOwnerName[MAX_OWNER_NAME_LENGTH-1] = '\0';
+                
+                // Mark as changed
+                existingDevice.ownerChanged = true;
+            }
+            
             // Update device info and last seen timestamp
             strncpy(existingDevice.ownerName, device.ownerName, MAX_OWNER_NAME_LENGTH);
             strncpy(existingDevice.deviceName, device.deviceName, MAX_DEVICE_NAME_LENGTH);
@@ -224,6 +258,8 @@ void DapUpProtocol::processReceivedDevice(const DiscoveredDevice& device) {
         // If we get here, it's a new device
         DiscoveredDevice newDevice = device;
         newDevice.lastSeen = millis(); // Set initial timestamp
+        newDevice.ownerChanged = false; // Initialize as not changed
+        memset(newDevice.previousOwnerName, 0, MAX_OWNER_NAME_LENGTH); // Clear previous owner
         discoveredDevices.push_back(newDevice);
         
         Serial.print("New device discovered: ");

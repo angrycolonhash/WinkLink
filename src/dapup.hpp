@@ -21,6 +21,8 @@ struct DiscoveredDevice {
     char deviceName[MAX_DEVICE_NAME_LENGTH];      
     unsigned long lastSeen;
     uint8_t friendRequestFlag;  // 0: none, 1: sending request  
+    bool ownerChanged;          // Flag to track if owner name has changed
+    char previousOwnerName[MAX_OWNER_NAME_LENGTH]; // Previous owner name for tracking changes
     
     // Equality operator
     bool operator==(const DiscoveredDevice& other) const {

@@ -119,6 +119,26 @@ void handleFriendActionMenuState(bool button1Pressed, bool button2Pressed) {
         drawDiscoveryScreenWithSelection(tft, device.device_name, devices, selectedDeviceIndex);
       }
     }
+    else if (friendStatus == FRIEND_STATUS_REQUEST_SENT) {
+      if (friendActionOption == 0) {
+        // Cancel request
+        if (friendManager.declineFriendRequest(selectedDevice)) {
+          showToast("Friend request canceled!", TFT_DARKGREY);
+        }
+        currentState = DISCOVERY_SCREEN;
+        drawDiscoveryScreen(tft, device.device_name, devices);
+      }
+      else if (friendActionOption == 1) {
+        // Block device option
+        currentState = DISCOVERY_SCREEN;
+        drawDiscoveryScreen(tft, device.device_name, devices);
+      }
+      else if (friendActionOption == 2) {
+        // Back to device selection
+        currentState = DEVICE_SELECTION;
+        drawDiscoveryScreenWithSelection(tft, device.device_name, devices, selectedDeviceIndex);
+      }
+    }
     else if (friendStatus == FRIEND_STATUS_REQUEST_RECEIVED) {
       if (friendActionOption == 0) {
         // Accept request
@@ -142,7 +162,26 @@ void handleFriendActionMenuState(bool button1Pressed, bool button2Pressed) {
         drawDiscoveryScreenWithSelection(tft, device.device_name, devices, selectedDeviceIndex);
       }
     }
-    // Add other status handling (FRIEND_STATUS_REQUEST_SENT, FRIEND_STATUS_ACCEPTED)
+    else if (friendStatus == FRIEND_STATUS_ACCEPTED) {
+      if (friendActionOption == 0) {
+        // Remove friend
+        if (friendManager.declineFriendRequest(selectedDevice)) {
+          showToast("Friend removed", TFT_DARKGREY);
+        }
+        currentState = DISCOVERY_SCREEN;
+        drawDiscoveryScreen(tft, device.device_name, devices);
+      }
+      else if (friendActionOption == 1) {
+        // Block device option
+        currentState = DISCOVERY_SCREEN;
+        drawDiscoveryScreen(tft, device.device_name, devices);
+      }
+      else if (friendActionOption == 2) {
+        // Back to device selection
+        currentState = DEVICE_SELECTION;
+        drawDiscoveryScreenWithSelection(tft, device.device_name, devices, selectedDeviceIndex);
+      }
+    }
     else {
       // Default - go back to discovery
       currentState = DISCOVERY_SCREEN;
