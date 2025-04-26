@@ -11,18 +11,19 @@
 #define MAX_OWNER_NAME_LENGTH 20
 #define MAX_DEVICE_NAME_LENGTH 32
 
-// Update the DiscoveredDevice struct definition
 struct DiscoveredDevice {
     uint8_t macAddr[6];                           
     char ownerName[MAX_OWNER_NAME_LENGTH];        
     char deviceName[MAX_DEVICE_NAME_LENGTH];      
-    unsigned long lastSeen;                       
+    unsigned long lastSeen;
+    uint8_t friendRequestFlag;  // 0: none, 1: sending request  
     
     // Equality operator
     bool operator==(const DiscoveredDevice& other) const {
         return memcmp(macAddr, other.macAddr, 6) == 0;
     }
 };
+
 class DapUpProtocol {
 private:
     std::vector<DiscoveredDevice> discoveredDevices;
