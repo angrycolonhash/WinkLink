@@ -1,0 +1,1 @@
+SPIInterface<SpiDeviceDriver<'_, SpiDriver<'_>>, PinDriver<'_, Gpio16, esp_idf_hal::gpio::Output>>

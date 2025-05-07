@@ -1,0 +1,1 @@
+fn(_) -> Result<PinDriver<'_, _, InputOutput>, EspError> {PinDriver::<'_, _, InputOutput>::input_output::<_>}

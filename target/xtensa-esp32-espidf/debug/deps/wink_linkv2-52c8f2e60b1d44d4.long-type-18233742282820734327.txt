@@ -1,0 +1,1 @@
+mipidsi::Builder<SpiInterface<'_, _, _>, ST7789, Result<esp_idf_hal::gpio::PinDriver<'_, esp_idf_hal::gpio::Gpio16, InputOutput>, EspError>>

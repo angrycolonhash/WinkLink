@@ -1,0 +1,38 @@
+Build configuration: BuildConfig {
+    esp_idf_tools_install_dir: None,
+    esp_idf_sdkconfig: None,
+    esp_idf_sdkconfig_defaults: None,
+    mcu: Some(
+        "esp32",
+    ),
+    native: NativeConfig {
+        esp_idf_version: Some(
+            Tag(
+                "v5.3.2",
+            ),
+        ),
+        esp_idf_repository: None,
+        esp_idf_cmake_generator: None,
+        idf_path: None,
+        extra_components: [],
+        esp_idf_components: None,
+        esp_idf_component_manager: None,
+    },
+    esp_idf_sys_root_crate: None,
+}
+Using managed esp-idf repository: RemoteSdk { repo_url: None, git_ref: Tag("v5.3.2") }
+Using esp-idf v5.3.2 at '/Users/thribhukrishnan/wink-linkv2/.embuild/espressif/esp-idf/v5.3.2'
+Built components: xtensa, esp_driver_gpio, esp_pm, mbedtls, bootloader, esptool_py, partition_table, esp_app_format, esp_bootloader_format, app_update, esp_partition, efuse, bootloader_support, esp_mm, spi_flash, esp_system, esp_common, esp_rom, hal, log, heap, soc, esp_hw_support, freertos, newlib, pthread, cxx, esp_timer, esp_driver_gptimer, esp_ringbuf, esp_driver_uart, app_trace, esp_event, nvs_flash, esp_driver_pcnt, esp_driver_spi, esp_driver_mcpwm, esp_driver_ana_cmpr, esp_driver_i2s, sdmmc, esp_driver_sdmmc, esp_driver_sdspi, esp_driver_sdio, esp_driver_dac, esp_driver_rmt, esp_driver_tsens, esp_driver_sdm, esp_driver_i2c, esp_driver_ledc, esp_driver_parlio, esp_driver_usb_serial_jtag, driver, esp_phy, esp_vfs_console, vfs, lwip, esp_netif_stack, esp_netif, wpa_supplicant, esp_coex, esp_wifi, bt, unity, cmock, console, http_parser, esp-tls, esp_adc, esp_driver_isp, esp_driver_cam, esp_driver_jpeg, esp_driver_ppa, esp_driver_touch_sens, esp_eth, esp_gdbstub, esp_hid, tcp_transport, esp_http_client, esp_http_server, esp_https_ota, esp_https_server, esp_psram, esp_lcd, protobuf-c, protocomm, esp_local_ctrl, espcoredump, wear_levelling, fatfs, idf_test, ieee802154, json, mqtt, nvs_sec_provider, openthread, perfmon, spiffs, ulp, usb, wifi_provisioning, main
+clang diag: /Users/thribhukrishnan/wink-linkv2/.embuild/espressif/esp-idf/v5.3.2/components/freertos/esp_additions/include/freertos/task_snapshot.h:8:2: warning: freertos/task_snapshot.h header is no longer used, and will be removed in future versions. [-W#warnings]
+clang diag: /Users/thribhukrishnan/wink-linkv2/.embuild/espressif/esp-idf/v5.3.2/components/spi_flash/include/esp_spi_flash.h:6:2: warning: esp_spi_flash.h is deprecated, please use spi_flash_mmap.h instead [-W#warnings]
+clang diag: /Users/thribhukrishnan/wink-linkv2/.embuild/espressif/esp-idf/v5.3.2/components/esp_adc/deprecated/include/esp_adc_cal.h:17:2: warning: "legacy adc calibration driver is deprecated, please migrate to use esp_adc/adc_cali.h and esp_adc/adc_cali_scheme.h" [-W#warnings]
+clang diag: /Users/thribhukrishnan/wink-linkv2/.embuild/espressif/esp-idf/v5.3.2/components/wpa_supplicant/esp_supplicant/include/esp_wpa2.h:10:9: warning: esp_wpa2.h is deprecated. Use esp_eap_client.h instead. [-W#pragma-messages]
+clang diag: /Users/thribhukrishnan/wink-linkv2/.embuild/espressif/esp-idf/v5.3.2/components/driver/deprecated/driver/adc.h:19:2: warning: "legacy adc driver is deprecated, please migrate to use esp_adc/adc_oneshot.h and esp_adc/adc_continuous.h for oneshot mode and continuous mode drivers respectively" [-W#warnings]
+clang diag: /Users/thribhukrishnan/wink-linkv2/.embuild/espressif/esp-idf/v5.3.2/components/driver/deprecated/driver/dac.h:16:2: warning: "The legacy DAC driver is deprecated, please use `driver/dac_oneshot.h`, `driver/dac_cosine.h` or `driver/dac_continuous.h` instead" [-W#warnings]
+clang diag: /Users/thribhukrishnan/wink-linkv2/.embuild/espressif/esp-idf/v5.3.2/components/driver/deprecated/driver/i2s.h:27:2: warning: "This set of I2S APIs has been deprecated, please include 'driver/i2s_std.h', 'driver/i2s_pdm.h' or 'driver/i2s_tdm.h' instead. if you want to keep using the old APIs and ignore this warning, you can enable 'Suppress legacy driver deprecated warning' option under 'I2S Configuration' menu in Kconfig" [-W#warnings]
+clang diag: /Users/thribhukrishnan/wink-linkv2/.embuild/espressif/esp-idf/v5.3.2/components/driver/deprecated/driver/pcnt.h:15:2: warning: "legacy pcnt driver is deprecated, please migrate to use driver/pulse_cnt.h" [-W#warnings]
+clang diag: /Users/thribhukrishnan/wink-linkv2/.embuild/espressif/esp-idf/v5.3.2/components/driver/deprecated/driver/periph_ctrl.h:7:2: warning: driver/periph_ctrl.h header is no longer used, and will be removed in future versions. [-W#warnings]
+clang diag: /Users/thribhukrishnan/wink-linkv2/.embuild/espressif/esp-idf/v5.3.2/components/driver/deprecated/driver/rmt.h:18:2: warning: "The legacy RMT driver is deprecated, please use driver/rmt_tx.h and/or driver/rmt_rx.h" [-W#warnings]
+clang diag: /Users/thribhukrishnan/wink-linkv2/.embuild/espressif/esp-idf/v5.3.2/components/driver/deprecated/driver/rtc_cntl.h:7:2: warning: driver/rtc_cntl.h header is no longer used, and will be removed in future versions. [-W#warnings]
+clang diag: /Users/thribhukrishnan/wink-linkv2/.embuild/espressif/esp-idf/v5.3.2/components/driver/deprecated/driver/sigmadelta.h:15:2: warning: "The legacy sigma-delta driver is deprecated, please use driver/sdm.h" [-W#warnings]
+clang diag: /Users/thribhukrishnan/wink-linkv2/.embuild/espressif/esp-idf/v5.3.2/components/driver/deprecated/driver/timer.h:16:2: warning: "legacy timer group driver is deprecated, please migrate to driver/gptimer.h" [-W#warnings]

@@ -1,0 +1,6 @@
+$ mkdir -p "/Users/thribhukrishnan/wink-linkv2/target/xtensa-esp32-espidf/debug/build/az-5631b488837b6fae/out/try_track_caller"
+$ cd "/Users/thribhukrishnan/wink-linkv2/target/xtensa-esp32-espidf/debug/build/az-5631b488837b6fae/out/try_track_caller"
+$ printf '%s' "// try_tra"... > "/Users/thribhukrishnan/wink-linkv2/target/xtensa-esp32-espidf/debug/build/az-5631b488837b6fae/out/try_track_caller/try_track_caller.rs"
+$ cd "/Users/thribhukrishnan/wink-linkv2/target/xtensa-esp32-espidf/debug/build/az-5631b488837b6fae/out/try_track_caller" && "/Users/thribhukrishnan/.rustup/toolchains/esp/bin/rustc" "try_track_caller.rs" "--emit=dep-info,metadata" >& /dev/null
+cargo:rustc-cfg=track_caller
+$ rm -r "/Users/thribhukrishnan/wink-linkv2/target/xtensa-esp32-espidf/debug/build/az-5631b488837b6fae/out/try_track_caller"

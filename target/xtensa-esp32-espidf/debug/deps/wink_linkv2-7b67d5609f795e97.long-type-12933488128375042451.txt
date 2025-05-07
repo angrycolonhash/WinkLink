@@ -1,0 +1,1 @@
+fn(_) -> Result<esp_idf_hal::gpio::PinDriver<'_, _, InputOutput>, EspError> {esp_idf_hal::gpio::PinDriver::<'_, _, InputOutput>::input_output::<_>}

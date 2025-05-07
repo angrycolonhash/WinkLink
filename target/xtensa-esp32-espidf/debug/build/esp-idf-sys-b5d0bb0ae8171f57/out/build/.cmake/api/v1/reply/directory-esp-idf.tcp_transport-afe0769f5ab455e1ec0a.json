@@ -1,0 +1,14 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : [],
+		"files" : [],
+		"nodes" : []
+	},
+	"installers" : [],
+	"paths" : 
+	{
+		"build" : "esp-idf/tcp_transport",
+		"source" : "/Users/thribhukrishnan/wink-linkv2/.embuild/espressif/esp-idf/v5.3.2/components/tcp_transport"
+	}
+}

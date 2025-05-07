@@ -1,0 +1,1 @@
+mipidsi::Display<SpiInterface<'_, _, _>, ST7789, esp_idf_hal::gpio::PinDriver<'_, esp_idf_hal::gpio::Gpio15, InputOutput>>
