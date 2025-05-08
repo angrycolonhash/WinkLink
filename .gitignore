@@ -1,5 +1,5 @@
-/.vscode
+.vscode
 .embuild
 target
-/Cargo.lock
+Cargo.lock
 .DS_Store
