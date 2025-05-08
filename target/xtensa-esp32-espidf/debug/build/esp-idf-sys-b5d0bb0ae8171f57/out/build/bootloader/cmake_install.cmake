@@ -1,4 +1,4 @@
-# Install script for directory: /Users/thribhukrishnan/wink-linkv2/.embuild/espressif/esp-idf/v5.3.2/components/bootloader/subproject
+# Install script for directory: /Users/thribhukrishnan/WinkLink/.embuild/espressif/esp-idf/v5.3.2/components/bootloader/subproject
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -34,12 +34,12 @@ endif()
 
 # Set path to fallback-tool for dependency-resolution.
 if(NOT DEFINED CMAKE_OBJDUMP)
-  set(CMAKE_OBJDUMP "/Users/thribhukrishnan/wink-linkv2/.embuild/espressif/tools/xtensa-esp-elf/esp-13.2.0_20240530/xtensa-esp-elf/bin/xtensa-esp32-elf-objdump")
+  set(CMAKE_OBJDUMP "/Users/thribhukrishnan/WinkLink/.embuild/espressif/tools/xtensa-esp-elf/esp-13.2.0_20240530/xtensa-esp-elf/bin/xtensa-esp32-elf-objdump")
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("/Users/thribhukrishnan/wink-linkv2/target/xtensa-esp32-espidf/debug/build/esp-idf-sys-b5d0bb0ae8171f57/out/build/bootloader/esp-idf/cmake_install.cmake")
+  include("/Users/thribhukrishnan/WinkLink/target/xtensa-esp32-espidf/debug/build/esp-idf-sys-b5d0bb0ae8171f57/out/build/bootloader/esp-idf/cmake_install.cmake")
 endif()
 
 if(CMAKE_INSTALL_COMPONENT)
@@ -57,6 +57,6 @@ endif()
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-  file(WRITE "/Users/thribhukrishnan/wink-linkv2/target/xtensa-esp32-espidf/debug/build/esp-idf-sys-b5d0bb0ae8171f57/out/build/bootloader/${CMAKE_INSTALL_MANIFEST}"
+  file(WRITE "/Users/thribhukrishnan/WinkLink/target/xtensa-esp32-espidf/debug/build/esp-idf-sys-b5d0bb0ae8171f57/out/build/bootloader/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")
 endif()

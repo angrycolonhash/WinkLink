@@ -4,6 +4,6 @@
 
 method=source_dir
 command=
-source_dir=/Users/thribhukrishnan/wink-linkv2/.embuild/espressif/esp-idf/v5.3.2/components/bootloader/subproject
+source_dir=/Users/thribhukrishnan/WinkLink/.embuild/espressif/esp-idf/v5.3.2/components/bootloader/subproject
 work_dir=
 

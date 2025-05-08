@@ -1,4 +1,4 @@
-# Install script for directory: /Users/thribhukrishnan/wink-linkv2/.embuild/espressif/esp-idf/v5.3.2/components/esp_bootloader_format
+# Install script for directory: /Users/thribhukrishnan/WinkLink/.embuild/espressif/esp-idf/v5.3.2/components/esp_bootloader_format
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -34,6 +34,6 @@ endif()
 
 # Set path to fallback-tool for dependency-resolution.
 if(NOT DEFINED CMAKE_OBJDUMP)
-  set(CMAKE_OBJDUMP "/Users/thribhukrishnan/wink-linkv2/.embuild/espressif/tools/xtensa-esp-elf/esp-13.2.0_20240530/xtensa-esp-elf/bin/xtensa-esp32-elf-objdump")
+  set(CMAKE_OBJDUMP "/Users/thribhukrishnan/WinkLink/.embuild/espressif/tools/xtensa-esp-elf/esp-13.2.0_20240530/xtensa-esp-elf/bin/xtensa-esp32-elf-objdump")
 endif()
 
