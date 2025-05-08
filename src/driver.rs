@@ -1,11 +1,10 @@
 use embedded_hal::spi::MODE_3;
-use esp_idf_hal::{delay::Delay, gpio::{AnyIOPin, Gpio15, Gpio2, Gpio4, Output}, prelude::Peripherals, spi::{config::{self, BitOrder, Config, Duplex}, SpiDeviceDriver, SpiDriver, SpiDriverConfig}, units::{FromValueType, Hertz}};
+use esp_idf_hal::{delay::Delay, gpio::{AnyIOPin, Gpio15, Gpio2, Gpio4, Level, Output}, prelude::Peripherals, spi::{config::{self, BitOrder, Config, Duplex}, SpiDeviceDriver, SpiDriver, SpiDriverConfig}, units::{FromValueType, Hertz}};
 use esp_idf_svc::hal::gpio::PinDriver;
 use mipidsi::interface::SpiInterface;
 use mipidsi::Builder;
 use mipidsi::models::ST7789;
 use mipidsi::Display;
-
 pub struct ST7789Display {
     display: Box<Display<SpiInterface<'static, SpiDeviceDriver<'static, SpiDriver<'static>>, PinDriver<'static, Gpio2, Output>>, ST7789, PinDriver<'static, Gpio15, Output>>>,
     backlight: Box<PinDriver<'static, Gpio4, Output>>,
