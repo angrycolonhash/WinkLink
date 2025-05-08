@@ -1,1 +1,0 @@
-for<'a> fn(_, _, _, Option<_>, &'a DriverConfig) -> Result<SpiDriver<'_>, EspError> {SpiDriver::<'_>::new::<_, _, _, _, _, _, _, _>}

@@ -1,1 +1,0 @@
-/Users/thribhukrishnan/wink-linkv2/target/xtensa-esp32-espidf/debug/wink-linkv2: /Users/thribhukrishnan/wink-linkv2/build.rs /Users/thribhukrishnan/wink-linkv2/src/20250411_021904936_iOS.bmp /Users/thribhukrishnan/wink-linkv2/src/main.rs

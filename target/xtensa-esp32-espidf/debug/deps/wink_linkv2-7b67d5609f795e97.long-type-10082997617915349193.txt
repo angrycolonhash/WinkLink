@@ -1,1 +1,0 @@
-mipidsi::Builder<SpiInterface<'_, _, _>, ST7789, Result<PinDriver<'_, _, InputOutput>, EspError>>

@@ -1,1 +1,0 @@
-mipidsi::Builder<SpiInterface<'_, SpiDeviceDriver<'_, Result<SpiDriver<'_>, EspError>>, esp_idf_hal::gpio::PinDriver<'_, esp_idf_hal::gpio::Gpio2, InputOutput>>, ST7789, NoResetPin>
