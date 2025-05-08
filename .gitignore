@@ -4,3 +4,5 @@
 .vscode/launch.json
 .vscode/ipch
 !.pio/libdeps/upesy_wroom/TFT_eSPI/User_Setup.h
+target
+.DS_Store
