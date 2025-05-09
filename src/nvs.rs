@@ -1,4 +1,9 @@
-use std::ffi::{c_char, c_int, c_void, CString};
+// ESP-NVS Library
+// Original by https://github.com/emeric-martineau/esp-nvs
+// License: MIT
+// Thank you for the library/code :)
+
+use std::{error::Error, ffi::{c_char, c_int, c_void, CString}};
 
 use esp_idf_sys::{
     nvs_close, nvs_commit, nvs_erase_key, nvs_flash_init_partition, nvs_get_blob, nvs_get_i16,
@@ -62,6 +67,40 @@ pub enum NvsError {
 
     Other(i32),
     Unknown,
+}
+
+impl ToString for NvsError {
+    fn to_string(&self) -> String {
+        match self {
+            NvsError::NotInitialized => String::from("Not Initialised"),
+            NvsError::NotFound => String::from("Not found"),
+            NvsError::PartitionNotFound => String::from("Partition not found"),
+            NvsError::KeysNotInitialized => String::from("Keys not initialized"),
+            NvsError::NotEnoughSpace => String::from("Not enough space"),
+            NvsError::PageFull => String::from("Page full"),
+            NvsError::ValueTooLong => String::from("Value too long"),
+            NvsError::KeyTooLong => String::from("Key too long"),
+            NvsError::TypeMismatch => String::from("Type mismatch"),
+            NvsError::InvalidName => String::from("Invalid name"),
+            NvsError::InvalidHandle => String::from("Invalid handle"),
+            NvsError::InvalidLength => String::from("Invalid length"),
+            NvsError::NoFreeSpace => String::from("No free space"),
+            NvsError::WrongEncryption => String::from("Wrong encryption"),
+            NvsError::Readonly => String::from("Read only"),
+            NvsError::InvalidState => String::from("Invalid state"),
+            NvsError::ContentDiffers => String::from("Content differs"),
+            NvsError::RemoveFailed => String::from("Remove failed"),
+            NvsError::CorruptKeyPartition => String::from("Corrupt key partition"),
+            NvsError::NewVersionFound => String::from("New version found"),
+            NvsError::EncryptionFailed => String::from("Encryption failed"),
+            NvsError::DecryptionFailed => String::from("Decryption failed"),
+            NvsError::EncryptionNotSupported => String::from("Encryption not supported"),
+            NvsError::ConfigFailed => String::from("Configuration failed"),
+            NvsError::ConfigNotFound => String::from("Configuration not found"),
+            NvsError::Other(code) => format!("Other error: {}", code),
+            NvsError::Unknown => String::from("Unknown error"),
+        }
+    }
 }
 
 impl From<i32> for NvsError {
@@ -141,6 +180,8 @@ impl EspNvsBuilder {
 
     /// Build Preference object
     pub fn build(&self) -> Result<EspNvs, NvsError> {
+        esp_idf_svc::nvs::EspDefaultNvsPartition::take().unwrap();
+
         // Create struct at first to use pointer of this object
         let c_name = CString::new(self.name.clone()).unwrap();
         let c_name_ptr: *const c_char = c_name.as_ptr() as *const c_char;
