@@ -70,6 +70,10 @@ pub fn boot(
         ).unwrap();
     std::thread::sleep(Duration::from_millis(800));
 
-    
+    boot_actions();
     Ok(())
+}
+
+pub(crate) fn boot_actions() {
+    
 }

@@ -32,6 +32,13 @@ mipidsi = "0.9.0"
 tinybmp = "0.6.0"
 anyhow = "1.0.98"
 u8g2-fonts = "0.6.0"
+aes = "0.8.4"
+crc = "3.3.0"
+heapless = "0.8.0"
+rand = "0.9.1"
+xts-mode = "0.5.1"
+zerocopy = "0.8.25"
+esp-idf-sys = "0.36.1"
 
 [build-dependencies]
 embuild = "0.33"
