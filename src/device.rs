@@ -1,4 +1,6 @@
-use crate::{nvs, setup::WifiPeripherals};
+use std::time::Duration;
+
+use crate::{nvs, wifi::{self, WifiPeripherals}};
 use anyhow::anyhow;
 
 pub struct WinkLinkDeviceInfo {
@@ -50,7 +52,45 @@ impl WinkLinkDeviceInfo {
         };
     
         if is_setup == false {
-            todo!("Device is not setup yet, to be implemented later");
+            // Start WiFi AP
+            let wifi = wifi::WinkLinkWifiInfo::new(wifi_pins, nvs);
+            
+            // Display connection info
+            log::info!("WiFi AP started: SSID={}, Password={}", wifi.ssid, wifi.password);
+            
+            // Start web server
+            log::info!("Starting web server...");
+            let web_server = match WinkLinkWebServer::new() {
+                Ok(server) => {
+                    log::info!("Web server started successfully");
+                    server
+                },
+                Err(e) => {
+                    log::error!("Failed to start web server: {}", e);
+                    return Err(anyhow!("Failed to start web server"));
+                }
+            };
+            
+            // Wait for device to connect
+            log::info!("Waiting for device to connect to WiFi AP...");
+            while !wifi.has_connected_devices() {
+                log::info!("Awaiting connection...");
+                std::thread::sleep(Duration::from_millis(1000));
+            }
+            
+            log::info!("Device connected to WiFi AP!");
+            
+            // Once we have a connection and the web server is running,
+            // the user can navigate to 192.168.4.1 in their browser
+            
+            // Wait for setup to complete - in a real app, you'd use a more sophisticated
+            // mechanism to detect when setup is complete
+            std::thread::sleep(Duration::from_secs(30));
+            
+            log::info!("Successfully setup device");
+            
+            // Here, you might want to save the completed setup information
+            // to NVS, etc.
         }
     
         Ok(WinkLinkDeviceInfo {

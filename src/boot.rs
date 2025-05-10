@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::{device::{self, WinkLinkDeviceInfo}, driver::ST7789Display, error::{self, fatal_crash, ResultExt}, nvs, setup::WifiPeripherals};
+use crate::{device::{self, WinkLinkDeviceInfo}, driver::ST7789Display, error::{self, fatal_crash, ResultExt}, nvs, wifi::WifiPeripherals};
 use embedded_graphics::{mono_font::{ascii, iso_8859_9::FONT_9X18_BOLD, MonoFont, MonoTextStyle}, pixelcolor::Rgb565, prelude::*, primitives::{Circle, PrimitiveStyle, StyledDrawable}, text::Text};
 use esp_idf_hal::{prelude::Peripherals};
 use u8g2_fonts::{fonts::{self, u8g2_font_helvB08_te, u8g2_font_helvB08_tr, u8g2_font_helvB10_te, u8g2_font_helvB10_tr, u8g2_font_helvB14_te, u8g2_font_helvB24_te, u8g2_font_luRS19_tr, u8g2_font_luRS24_te}, types::{FontColor, HorizontalAlignment, VerticalPosition}, FontRenderer};
@@ -76,7 +76,7 @@ pub fn boot(st7789: &mut ST7789Display, wifi_pins: WifiPeripherals) -> anyhow::R
         ).unwrap();
     std::thread::sleep(Duration::from_millis(800));
 
-    let winklink = boot_actions(wifi_pins).unwrap_or_fatal(st7789);
+    let winklink = boot_actions(wifi_pins).unwrap_or_fatal();
 
     Ok(winklink)
 }

@@ -1,4 +1,4 @@
-pub mod setup;
+pub mod wifi;
 pub mod error;
 pub mod device;
 pub mod nvs;

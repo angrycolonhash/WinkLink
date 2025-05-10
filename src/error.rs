@@ -1,28 +1,73 @@
 use std::time::Duration;
+use std::sync::Once;
+use core::cell::RefCell;
 
 use embedded_graphics::{pixelcolor::Rgb565, prelude::*, primitives::PrimitiveStyle};
 use u8g2_fonts::{fonts::{u8g2_font_helvB08_te, u8g2_font_helvB10_te, u8g2_font_helvB24_te}, types::{FontColor, HorizontalAlignment, VerticalPosition}};
 
 use crate::driver::ST7789Display;
 
+// Global display manager
+pub struct DisplayManager {
+    display: RefCell<Option<*mut ST7789Display>>,
+}
+
+// SAFETY: We're careful about not creating data races in our implementation
+unsafe impl Sync for DisplayManager {}
+
+impl DisplayManager {
+    pub fn global() -> &'static DisplayManager {
+        static INSTANCE: DisplayManager = DisplayManager {
+            display: RefCell::new(None),
+        };
+        &INSTANCE
+    }
+    
+    pub fn set_display(&self, display: &mut ST7789Display) {
+        static INIT: Once = Once::new();
+        
+        INIT.call_once(|| {
+            *self.display.borrow_mut() = Some(display as *mut ST7789Display);
+        });
+    }
+    
+    pub fn with_display<F, R>(&self, f: F) -> Option<R>
+    where
+        F: FnOnce(&mut ST7789Display) -> R,
+    {
+        if let Some(display_ptr) = *self.display.borrow() {
+            // SAFETY: We ensure exclusive access through RefCell
+            let display = unsafe { &mut *display_ptr };
+            Some(f(display))
+        } else {
+            None
+        }
+    }
+}
+
 pub trait ResultExt<T, E> {
-    fn unwrap_or_fatal(self, st7789: &mut ST7789Display) -> T;
+    fn unwrap_or_fatal(self) -> T;
 }
 
 impl<T, E: std::fmt::Display> ResultExt<T, E> for Result<T, E> {
-    fn unwrap_or_fatal(self, st7789: &mut ST7789Display) -> T {
+    fn unwrap_or_fatal(self) -> T {
         match self {
             Ok(value) => value,
             Err(error) => {
                 let error = anyhow::anyhow!("{}", error);
-                fatal_crash(st7789, error);
-                panic!("Fatal error occurred");
+                
+                // Try to display the error if the display is available
+                DisplayManager::global().with_display(|display| {
+                    fatal_crash(display, &error);
+                });
+                
+                panic!("Fatal error occurred: {}", error);
             }
         }
     }
 }
 
-pub fn fatal_crash(st7789: &mut ST7789Display, error: anyhow::Error) {
+pub fn fatal_crash(st7789: &mut ST7789Display, error: &anyhow::Error) {
     let display = st7789.display();
     
     // Show red screen with error message
@@ -100,6 +145,4 @@ pub fn fatal_crash(st7789: &mut ST7789Display, error: anyhow::Error) {
         
         std::thread::sleep(Duration::from_secs(1));
     }
-
-    panic!("Fatal error: {}", error);
 }

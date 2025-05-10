@@ -2,7 +2,8 @@ use std::{thread, time::Duration};
 
 use esp_idf_hal::gpio::PinDriver;
 use esp_idf_hal::prelude::Peripherals;
-use wink_link::setup::WifiPeripherals;
+use wink_link::error::DisplayManager;
+use wink_link::wifi::WifiPeripherals;
 use wink_link::{boot, device, driver};
 use embedded_graphics::prelude::*;
 use embedded_graphics::pixelcolor::Rgb565;
@@ -26,6 +27,8 @@ fn main() -> Result<(), anyhow::Error> {
     })?;
     st7789.set_backlight(true)?;
     st7789.display().clear(Rgb565::BLACK).unwrap();
+
+    DisplayManager::global().set_display(&mut st7789);
 
     boot::boot(&mut st7789, WifiPeripherals {modem: peripherals.modem}).unwrap();
 
