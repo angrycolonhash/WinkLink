@@ -1,3 +1,5 @@
+pub mod setup;
+pub mod error;
 pub mod device;
 pub mod nvs;
 pub mod boot;

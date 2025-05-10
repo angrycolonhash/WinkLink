@@ -5,6 +5,7 @@
 
 use std::{error::Error, ffi::{c_char, c_int, c_void, CString}};
 
+use esp_idf_svc::nvs::{EspDefaultNvs, EspDefaultNvsPartition};
 use esp_idf_sys::{
     nvs_close, nvs_commit, nvs_erase_key, nvs_flash_init_partition, nvs_get_blob, nvs_get_i16,
     nvs_get_i32, nvs_get_i64, nvs_get_i8, nvs_get_str, nvs_get_u16, nvs_get_u32, nvs_get_u64,
@@ -21,6 +22,8 @@ use esp_idf_sys::{
     ESP_ERR_NVS_XTS_CFG_FAILED, ESP_ERR_NVS_XTS_CFG_NOT_FOUND, ESP_ERR_NVS_XTS_DECR_FAILED,
     ESP_ERR_NVS_XTS_ENCR_FAILED,
 };
+
+use crate::device::WinkLinkDeviceInfo;
 
 /// NVS error return by ESP-IDF
 pub enum NvsError {
@@ -180,8 +183,7 @@ impl EspNvsBuilder {
 
     /// Build Preference object
     pub fn build(&self) -> Result<EspNvs, NvsError> {
-        esp_idf_svc::nvs::EspDefaultNvsPartition::take().unwrap();
-
+        let nvs = EspNvs::initialise_nvs();
         // Create struct at first to use pointer of this object
         let c_name = CString::new(self.name.clone()).unwrap();
         let c_name_ptr: *const c_char = c_name.as_ptr() as *const c_char;
@@ -193,6 +195,7 @@ impl EspNvsBuilder {
         };
 
         let mut pref = EspNvs {
+            nvs,
             c_name,
             is_readonly: self.is_readonly,
             c_partition_label: None,
@@ -229,6 +232,7 @@ impl EspNvsBuilder {
 
 /// Peferences
 pub struct EspNvs {
+    pub nvs: EspDefaultNvsPartition,
     /// Name of preference
     c_name: CString,
     /// Is preference is in read-only mode
@@ -247,6 +251,10 @@ impl Drop for EspNvs {
 }
 
 impl EspNvs {
+    pub fn initialise_nvs() -> EspDefaultNvsPartition {
+        return esp_idf_svc::nvs::EspDefaultNvsPartition::take().unwrap();
+    }
+
     /// Is preference is in read-only mode
     pub fn is_readonly(&self) -> bool {
         self.is_readonly
