@@ -1,7 +1,9 @@
 use std::time::Duration;
 
-use crate::{nvs, wifi::{self, WifiPeripherals}};
+use crate::{error::ResultExt, nvs, wifi::{self, WifiPeripherals}};
 use anyhow::anyhow;
+use esp_idf_svc::{eventloop::EspSystemEventLoop, nvs::EspDefaultNvsPartition};
+use esp_idf_sys::abort;
 
 pub struct WinkLinkDeviceInfo {
     pub(crate) serial_number: String,
@@ -18,7 +20,7 @@ impl WinkLinkDeviceInfo {
         }
     }
 
-    pub fn populate(wifi_pins: WifiPeripherals) -> anyhow::Result<WinkLinkDeviceInfo> {
+    pub fn populate(wifi_pins: WifiPeripherals, sysloop: EspSystemEventLoop) -> anyhow::Result<WinkLinkDeviceInfo> {
         let nvs = match nvs::EspNvsBuilder::default(String::from("nvs")).build() {
             Ok(value) => value,
             Err(error) => return Err(anyhow::anyhow!(error.to_string())),
@@ -52,45 +54,8 @@ impl WinkLinkDeviceInfo {
         };
     
         if is_setup == false {
-            // Start WiFi AP
-            let wifi = wifi::WinkLinkWifiInfo::new(wifi_pins, nvs);
-            
-            // Display connection info
-            log::info!("WiFi AP started: SSID={}, Password={}", wifi.ssid, wifi.password);
-            
-            // Start web server
-            log::info!("Starting web server...");
-            let web_server = match WinkLinkWebServer::new() {
-                Ok(server) => {
-                    log::info!("Web server started successfully");
-                    server
-                },
-                Err(e) => {
-                    log::error!("Failed to start web server: {}", e);
-                    return Err(anyhow!("Failed to start web server"));
-                }
-            };
-            
-            // Wait for device to connect
-            log::info!("Waiting for device to connect to WiFi AP...");
-            while !wifi.has_connected_devices() {
-                log::info!("Awaiting connection...");
-                std::thread::sleep(Duration::from_millis(1000));
-            }
-            
-            log::info!("Device connected to WiFi AP!");
-            
-            // Once we have a connection and the web server is running,
-            // the user can navigate to 192.168.4.1 in their browser
-            
-            // Wait for setup to complete - in a real app, you'd use a more sophisticated
-            // mechanism to detect when setup is complete
-            std::thread::sleep(Duration::from_secs(30));
-            
-            log::info!("Successfully setup device");
-            
-            // Here, you might want to save the completed setup information
-            // to NVS, etc.
+            crate::wifi::WinkLinkWifiInfo::provision(wifi_pins, sysloop, nvs).unwrap_or_fatal();
+            panic!("No error here, just resetting device");
         }
     
         Ok(WinkLinkDeviceInfo {

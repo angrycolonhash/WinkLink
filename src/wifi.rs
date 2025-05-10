@@ -1,183 +1,137 @@
-use esp_idf_hal::modem::Modem;
-use esp_idf_svc::{eventloop::EspSystemEventLoop, wifi::{ClientConfiguration, EspWifi, WifiEvent}};
+use esp_idf_hal::{modem::Modem};
+use esp_idf_svc::{eventloop::EspSystemEventLoop, http::{server::EspHttpServer, Method}, wifi::{AccessPointConfiguration, AuthMethod, BlockingWifi, ClientConfiguration, Configuration, EspWifi, Protocol, WifiEvent}};
 use rand::Rng;
 use heapless::String as HString;
-use core::fmt::Write;
-use std::{num::NonZero, time::Duration};
+use urlencoding::decode;
+use std::{fmt::Write, num::NonZero, str::FromStr, sync::{Arc, Mutex}, time::Duration};
 
 use crate::{error::ResultExt, nvs::EspNvs};
 
-pub struct WinkLinkWifiInfo {
-    pub ssid: String,
-    pub password: String,
-    // Add a field to hold the WiFi driver
-    wifi_driver: Option<EspWifi<'static>>,
+#[derive(Default, Clone, Debug)]
+struct Credentials {
+    ssid: String,
+    password: String,
 }
+
+pub struct WinkLinkWifiInfo {
+    wifi: BlockingWifi<EspWifi<'static>>,
+    credentials: Credentials,
+}
+
 
 pub struct WifiPeripherals {
     pub modem: Modem
 }
 
 impl WinkLinkWifiInfo {
-    pub fn new(peripherals: WifiPeripherals, nvs: EspNvs) -> Self {
-        // init wifi driver
-        let mut wifi_driver = EspWifi::new(
-            peripherals.modem,
-            EspSystemEventLoop::take().unwrap(),
-            Some(nvs.nvs.clone()),
-        ).unwrap();
-        
+    pub fn provision(mut peripherals: WifiPeripherals, sysloop: EspSystemEventLoop, nvs: EspNvs) -> anyhow::Result<Self> {
         // Generate SSID and password once
         let ssid = Self::generate_wifi_name();
         let password = Self::generate_wifi_password();
-        
-        // Configure as Access Point
-        wifi_driver.set_configuration(&esp_idf_svc::wifi::Configuration::AccessPoint(
-            esp_idf_svc::wifi::AccessPointConfiguration {
-                ssid: ssid.clone(),
-                password: password.clone(),
-                auth_method: esp_idf_svc::wifi::AuthMethod::WPA2Personal,
+
+        println!("SSID of setup wifi: {}, Password: {}", &ssid, &password);
+
+        let credentials_store = Arc::new(Mutex::new(None::<Credentials>));
+        let store_clone = credentials_store.clone();
+
+        let creds: Credentials = Credentials { ssid: String::new(), password: String::new() };
+
+        {
+            // init wifi driver
+            let mut wifi = BlockingWifi::wrap(
+                EspWifi::new(&mut peripherals.modem, sysloop.clone(), Some(nvs.nvs.clone()))?,
+                sysloop.clone(),
+            )?;
+
+            wifi.set_configuration(&Configuration::AccessPoint(AccessPointConfiguration {
+                ssid,
+                auth_method: AuthMethod::WPA2WPA3Personal,
+                password,
                 channel: 1,
                 ..Default::default()
-            }
-        )).unwrap_or_fatal();
+            }))?;
 
-        wifi_driver.start().unwrap_or_fatal();
-        
-        // Add a timeout and watch the watchdog
-        let start = std::time::Instant::now();
-        const MAX_WAIT_TIME: std::time::Duration = std::time::Duration::from_secs(10);
-        
-        let mut counter = 0;
-        while !wifi_driver.is_started().unwrap() {
-            // Feed the watchdog periodically
-            esp_idf_hal::delay::FreeRtos::delay_ms(10);
-            
-            if counter % 100 == 0 {  // Log only every ~1 second (100 * 10ms)
-                log::info!("Waiting for AP to start...");
-            }
-            
-            counter += 1;
-            
-            // Check for timeout
-            if start.elapsed() > MAX_WAIT_TIME {
-                log::warn!("Timeout waiting for AP to start");
-                break;
-            }
-        }
-        
-        if wifi_driver.is_started().unwrap() {
-            log::info!("WiFi AP started successfully!");
-            let config = wifi_driver.get_configuration().unwrap();
-            log::info!("AP configuration: {:?}", config);
-        } else {
-            log::error!("Failed to start WiFi AP!");
-        }
+            wifi.start()?;
 
-        WinkLinkWifiInfo {
-            ssid: ssid.as_str().to_string(),
-            password: password.as_str().to_string(),
-            wifi_driver: Some(wifi_driver),
-        }
-    }
+            let mut server = EspHttpServer::new(&esp_idf_svc::http::server::Configuration::default())?;
 
-    pub fn get_connected_count(&self) -> usize {
-        match &self.wifi_driver {
-            Some(driver) => {
-                // Use the proper API to check for connections
-                if let Ok(info) = driver {
-                    let counter = 0;
-                    for items in &info {
-                        
-                    }
-                } else {
-                    log::error!("Failed to get AP info");
-                    0
-                }
-            },
-            None => 0
-        }
-    }
-    
-    // Check if any devices are connected to this AP
-    pub fn has_connected_devices(&self) -> bool {
-        self.get_connected_count() > 0
-    }
-    
-    // Get information about connected clients
-    pub fn get_connected_devices(&self) -> Vec<String> {
-        let mut devices = Vec::new();
+            server.fn_handler("/", Method::Get, |req| -> anyhow::Result<()> {
+                req.into_ok_response()?.write(b"
+                    <html><body>
+                        <form method='post' action='/connect'>
+                            SSID: <input name='ssid' /><br/>
+                            Password: <input name='password' /><br/>
+                            <input type='submit' value='Connect' />
+                        </form>
+                    </body></html>
+                ")?;
+                Ok(())
+            })?;
+
+            server.fn_handler("/connect", Method::Post, move |mut req| -> anyhow::Result<()> {        
+                let mut body = [0u8; 512];
+                let size = req.read(&mut body)?;
+                let form = std::str::from_utf8(&body[..size])?;
         
-        match &self.wifi_driver {
-            Some(driver) => {
-                match driver.sta_list() {
-                    Ok(stations) => {
-                        for station in stations {
-                            // Format MAC address
-                            let mac = station.mac;
-                            let mac_str = format!(
-                                "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
-                                mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]
-                            );
-                            devices.push(mac_str);
-                        }
-                    },
-                    Err(e) => {
-                        log::error!("Failed to get station list: {}", e);
-                    }
-                }
-            },
-            None => {}
-        }
+                let mut ssid = String::new();
+                let mut password = String::new();
         
-        devices
-    }
-    
-    // Wait for at least one device to connect (with timeout)
-    pub fn wait_for_connection(&self, timeout_secs: u64) -> bool {
-        let start = std::time::Instant::now();
-        let timeout = Duration::from_secs(timeout_secs);
+                for pair in form.split('&') {
+                    let mut parts = pair.split('=');
+                    let key = parts.next().unwrap_or("");
+                    let value = parts.next().unwrap_or("");
+                    let decoded_value = decode(value).unwrap_or_default().to_string();
         
-        while !self.has_connected_devices() {
-            // Check for timeout
-            if start.elapsed() > timeout {
-                log::warn!("Timeout waiting for devices to connect");
-                return false;
-            }
-            
-            // Wait a bit before checking again
-            esp_idf_hal::delay::FreeRtos::delay_ms(100);
-        }
-        
-        log::info!("Device connected to WinkLink AP!");
-        true
-    }
-    
-    // Register a callback for connection events
-    pub fn register_connection_handler<F>(&self, event_loop: &EspSystemEventLoop, callback: F) -> anyhow::Result<()>
-    where 
-        F: Fn(WifiEvent) + Send + 'static 
-    {
-        match &self.wifi_driver {
-            Some(_) => {
-                // Register for WiFi events
-                event_loop.subscribe(move |event: WifiEvent| {
-                    match event {
-                        WifiEvent::ApStaConnected(sta) => {
-                            log::info!("Device connected: {:?}", sta);
-                        },
-                        WifiEvent::ApStaDisconnected(sta) => {
-                            log::info!("Device disconnected: {:?}", sta);
-                        },
+                    match key {
+                        "ssid" => ssid = decoded_value,
+                        "password" => password = decoded_value,
                         _ => {}
                     }
-                    
-                    // Call the user's callback
-                    callback(event);
-                }).map(|_| ()).map_err(anyhow::Error::from)
-            },
-            None => Err(anyhow::Error::from(esp_idf_svc::sys::EspError::from_non_zero(NonZero::new(1).unwrap())))
+                }
+        
+                println!("Received SSID: {}, Password: {}", ssid, password);
+        
+                *store_clone.lock().unwrap() = Some(Credentials { ssid, password });
+        
+                req.into_ok_response()?.write(b"Connecting...")?;
+                Ok(())
+            })?;
+        
+            println!("Web server started, waiting for credentials...");
+        
+            // Wait until credentials are submitted
+            let creds = loop {
+                if let Some(c) = credentials_store.lock().unwrap().clone() {
+                    break c;
+                }
+                std::thread::sleep(Duration::from_secs(1));
+            };
+        
+            println!("Credentials received: {:?}", creds);
         }
+
+        let mut wifi = BlockingWifi::wrap(
+            EspWifi::new(peripherals.modem, sysloop.clone(), Some(nvs.nvs.clone()))?,
+            sysloop,
+        )?;
+
+        wifi.set_configuration(&Configuration::Client(ClientConfiguration {
+            ssid: HString::from_str(&creds.ssid).unwrap(),
+            auth_method: AuthMethod::WPA2WPA3Personal,
+            password: HString::from_str(&creds.password).unwrap(),
+            ..Default::default()
+        }))?;
+
+        wifi.start()?;
+        wifi.connect()?;
+        wifi.wait_netif_up()?;
+
+        println!("Wi-Fi connected.");
+
+        Ok(Self {
+            wifi,
+            credentials: creds,
+        })
     }
 
     fn generate_wifi_name() -> HString<32> {
@@ -198,7 +152,7 @@ impl WinkLinkWifiInfo {
         const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ\
                                 abcdefghijklmnopqrstuvwxyz\
                                 0123456789";
-        const PASSWORD_LEN: usize = 12;
+        const PASSWORD_LEN: usize = 8;
         
         let mut password = HString::<64>::new();
         

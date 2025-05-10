@@ -4,3 +4,4 @@ pub mod device;
 pub mod nvs;
 pub mod boot;
 pub mod driver;
+pub mod iamsingle;
