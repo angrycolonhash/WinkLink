@@ -9,8 +9,8 @@ use anyhow::anyhow;
 
 const font: FontRenderer = u8g2_fonts::FontRenderer::new::<u8g2_font_helvB24_te>(); // TODO: Change the font it looks like a chinese knockoff lol
 
-pub(crate) fn boot_actions(wifi_pins: WifiPeripherals, sysloop: EspSystemEventLoop) -> anyhow::Result<WinkLinkDeviceInfo> {
-    let winklink = device::WinkLinkDeviceInfo::populate(wifi_pins, sysloop)?;
+pub(crate) fn boot_actions(st7789: &mut ST7789Display, wifi_pins: WifiPeripherals, sysloop: EspSystemEventLoop) -> anyhow::Result<WinkLinkDeviceInfo> {
+    let winklink = device::WinkLinkDeviceInfo::populate(st7789, wifi_pins, sysloop)?;
 
     Ok(winklink)
 }
@@ -77,7 +77,7 @@ pub fn boot(st7789: &mut ST7789Display, wifi_pins: WifiPeripherals, sysloop: Esp
         ).unwrap();
     std::thread::sleep(Duration::from_millis(800));
 
-    let winklink = boot_actions(wifi_pins, sysloop).unwrap_or_fatal();
+    let winklink = boot_actions(st7789, wifi_pins, sysloop).unwrap_or_fatal();
 
     Ok(winklink)
 }

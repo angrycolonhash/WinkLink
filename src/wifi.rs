@@ -1,11 +1,14 @@
+use embedded_graphics::{pixelcolor::Rgb565, prelude::RgbColor};
 use esp_idf_hal::{modem::Modem};
 use esp_idf_svc::{eventloop::EspSystemEventLoop, http::{server::EspHttpServer, Method}, wifi::{AccessPointConfiguration, AuthMethod, BlockingWifi, ClientConfiguration, Configuration, EspWifi, Protocol, WifiEvent}};
 use rand::Rng;
 use heapless::String as HString;
 use urlencoding::decode;
 use std::{fmt::Write, num::NonZero, str::FromStr, sync::{Arc, Mutex}, time::Duration};
+use embedded_graphics::draw_target::DrawTarget;
 
 use crate::{error::ResultExt, nvs::EspNvs};
+use crate::driver::ST7789Display;
 
 #[derive(Default, Clone, Debug)]
 struct Credentials {
@@ -24,7 +27,7 @@ pub struct WifiPeripherals {
 }
 
 impl WinkLinkWifiInfo {
-    pub fn provision(mut peripherals: WifiPeripherals, sysloop: EspSystemEventLoop, nvs: EspNvs) -> anyhow::Result<Self> {
+    pub fn provision(st7789: &mut ST7789Display, mut peripherals: WifiPeripherals, sysloop: EspSystemEventLoop, nvs: EspNvs) -> anyhow::Result<Self> {
         // Generate SSID and password once
         let ssid = Self::generate_wifi_name();
         let password = Self::generate_wifi_password();
@@ -35,6 +38,9 @@ impl WinkLinkWifiInfo {
         let store_clone = credentials_store.clone();
 
         let creds: Credentials = Credentials { ssid: String::new(), password: String::new() };
+        
+        let mut display = st7789.display();
+        display.clear(Rgb565::BLACK).unwrap();
 
         {
             // init wifi driver
@@ -98,6 +104,8 @@ impl WinkLinkWifiInfo {
             })?;
         
             println!("Web server started, waiting for credentials...");
+            
+            
         
             // Wait until credentials are submitted
             let creds = loop {
@@ -117,7 +125,6 @@ impl WinkLinkWifiInfo {
 
         wifi.set_configuration(&Configuration::Client(ClientConfiguration {
             ssid: HString::from_str(&creds.ssid).unwrap(),
-            auth_method: AuthMethod::WPA2WPA3Personal,
             password: HString::from_str(&creds.password).unwrap(),
             ..Default::default()
         }))?;

@@ -2,8 +2,13 @@ use std::time::Duration;
 
 use crate::{error::ResultExt, nvs, wifi::{self, WifiPeripherals}};
 use anyhow::anyhow;
+use embedded_graphics::pixelcolor::Rgb565;
+use embedded_graphics::prelude::*;
 use esp_idf_svc::{eventloop::EspSystemEventLoop, nvs::EspDefaultNvsPartition};
 use esp_idf_sys::abort;
+use u8g2_fonts::fonts::{u8g2_font_helvB08_te, u8g2_font_helvB14_te, u8g2_font_helvB24_te};
+use u8g2_fonts::types::{FontColor, HorizontalAlignment, VerticalPosition};
+use crate::driver::ST7789Display;
 
 pub struct WinkLinkDeviceInfo {
     pub(crate) serial_number: String,
@@ -20,7 +25,7 @@ impl WinkLinkDeviceInfo {
         }
     }
 
-    pub fn populate(wifi_pins: WifiPeripherals, sysloop: EspSystemEventLoop) -> anyhow::Result<WinkLinkDeviceInfo> {
+    pub fn populate(st7789: &mut ST7789Display, wifi_pins: WifiPeripherals, sysloop: EspSystemEventLoop) -> anyhow::Result<WinkLinkDeviceInfo> {
         let nvs = match nvs::EspNvsBuilder::default(String::from("nvs")).build() {
             Ok(value) => value,
             Err(error) => return Err(anyhow::anyhow!(error.to_string())),
@@ -54,7 +59,53 @@ impl WinkLinkDeviceInfo {
         };
     
         if is_setup == false {
-            crate::wifi::WinkLinkWifiInfo::provision(wifi_pins, sysloop, nvs).unwrap_or_fatal();
+            let display = st7789.display();
+            display.clear(Rgb565::BLACK).unwrap();
+
+            u8g2_fonts::FontRenderer::new::<u8g2_font_helvB14_te>()
+                .render_aligned(
+                    "Welcome to your new",
+                    Point::new(display.bounding_box().center().x, 53),
+                    VerticalPosition::Center,
+                    HorizontalAlignment::Center,
+                    FontColor::Transparent(Rgb565::WHITE),
+                    display
+                ).unwrap();
+            std::thread::sleep(Duration::from_millis(500));
+            u8g2_fonts::FontRenderer::new::<u8g2_font_helvB24_te>()
+                .render_aligned(
+                    "WinkLink",
+                    Point::new(display.bounding_box().center().x, display.bounding_box().center().y),
+                    VerticalPosition::Center,
+                    HorizontalAlignment::Center,
+                    FontColor::Transparent(Rgb565::WHITE),
+                    display
+                ).unwrap();
+            
+            std::thread::sleep(Duration::from_millis(3000));
+            display.clear(Rgb565::BLACK).unwrap();
+
+            u8g2_fonts::FontRenderer::new::<u8g2_font_helvB24_te>()
+                .render_aligned(
+                    "Step 1",
+                    Point::new(display.bounding_box().center().x, 40),
+                    VerticalPosition::Top,
+                    HorizontalAlignment::Center,
+                    FontColor::Transparent(Rgb565::WHITE),
+                    display
+                ).unwrap();
+            u8g2_fonts::FontRenderer::new::<u8g2_font_helvB14_te>()
+                .render_aligned(
+                    "Connect to Wifi",
+                    Point::new(display.bounding_box().center().x, display.bounding_box().center().y),
+                    VerticalPosition::Center,
+                    HorizontalAlignment::Center,
+                    FontColor::Transparent(Rgb565::WHITE),
+                    display
+                ).unwrap();
+            
+            wifi::WinkLinkWifiInfo::provision(st7789, wifi_pins, sysloop, nvs).unwrap_or_fatal();            
+            
             panic!("No error here, just resetting device");
         }
     
