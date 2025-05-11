@@ -40,6 +40,7 @@ xts-mode = "0.5.1"
 zerocopy = "0.8.25"
 esp-idf-sys = "0.36.1"
 urlencoding = "2.1.3"
+html-escape = "0.2.13"
 
 [build-dependencies]
 embuild = "0.33"

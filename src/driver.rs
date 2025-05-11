@@ -1,5 +1,5 @@
 use embedded_hal::spi::MODE_3;
-use esp_idf_hal::{delay::Delay, gpio::{AnyIOPin, Gpio15, Gpio18, Gpio2, Gpio23, Gpio4, Level, Output}, peripheral::Peripheral, prelude::Peripherals, spi::{config::{self, BitOrder, Config, Duplex}, SpiDeviceDriver, SpiDriver, SpiDriverConfig, SPI2}, units::{FromValueType, Hertz}};
+use esp_idf_hal::{delay::Delay, gpio::{AnyIOPin, Gpio15, Gpio18, Gpio2, Gpio23, Gpio4, Level, Output}, peripheral::Peripheral, prelude::Peripherals, spi::{config::{self, BitOrder, Config, Duplex}, Dma, SpiDeviceDriver, SpiDriver, SpiDriverConfig, SPI2}, units::{FromValueType, Hertz}};
 use esp_idf_svc::hal::gpio::PinDriver;
 use mipidsi::interface::SpiInterface;
 use mipidsi::Builder;
@@ -29,7 +29,12 @@ impl ST7789Display {
             .data_mode(MODE_3)
             .baudrate(Hertz::from(26_u32.MHz()))
             .bit_order(BitOrder::MsbFirst)
-            .duplex(Duplex::Full);
+            .duplex(Duplex::Half);
+
+        let driver_config = SpiDriverConfig::new()
+            .dma(esp_idf_hal::spi::Dma::Channel1(4096)) // Use DMA channel 1 with 4KB buffer
+            .intr_flags(esp_idf_hal::interrupt::InterruptType::Level1.into()); // Set interrupt priority
+    
     
         let device = SpiDeviceDriver::new_single(
             spi,
@@ -37,7 +42,7 @@ impl ST7789Display {
             display_pins.sda,
             display_pins.cs,
             display_pins.miso,
-            &SpiDriverConfig::new(),
+            &driver_config,
             &config,
         )?;
     

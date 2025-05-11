@@ -106,7 +106,19 @@ impl WinkLinkDeviceInfo {
             
             wifi::WinkLinkWifiInfo::provision(st7789, wifi_pins, sysloop, nvs).unwrap_or_fatal();            
             
-            panic!("No error here, just resetting device");
+            display.clear(Rgb565::BLACK);
+            
+            u8g2_fonts::FontRenderer::new::<u8g2_font_helvB14_te>()
+                .render_aligned(
+                    "It works now! Congrats",
+                    Point::new(display.bounding_box().center().x, display.bounding_box().center().y),
+                    VerticalPosition::Center,
+                    HorizontalAlignment::Center,
+                    FontColor::Transparent(Rgb565::WHITE),
+                    display
+                ).unwrap();
+            
+            panic!("No error, just resetting device");
         }
     
         Ok(WinkLinkDeviceInfo {
