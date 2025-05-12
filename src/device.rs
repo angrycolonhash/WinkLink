@@ -104,11 +104,11 @@ impl WinkLinkDeviceInfo {
                         FontColor::Transparent(Rgb565::WHITE),
                         display
                     ).unwrap();
-                    std::thread::sleep(Duration::from_millis(3000));
-
+                
+                std::thread::sleep(Duration::from_millis(3000));
             }
 
-            wifi::WinkLinkWifiInfo::provision(st7789, wifi_pins, sysloop, nvs).unwrap_or_fatal();            
+            wifi::WinkLinkWifiInfo::provision(st7789, wifi_pins, sysloop, nvs).unwrap_or_fatal();         
             
             let display = st7789.display();
             display.clear(Rgb565::BLACK).unwrap();
@@ -122,7 +122,20 @@ impl WinkLinkDeviceInfo {
                     FontColor::Transparent(Rgb565::WHITE),
                     display
                 ).unwrap();
-            
+            u8g2_fonts::FontRenderer::new::<u8g2_font_helvB08_te>()
+            .render_aligned(
+                "Please manually reset the device when ready",
+                Point::new(display.bounding_box().center().x, 45),
+                VerticalPosition::Bottom,
+                HorizontalAlignment::Center,
+                FontColor::Transparent(Rgb565::WHITE),
+                display
+                ).unwrap();
+
+            loop {
+                std::thread::sleep(Duration::from_millis(100));
+            }
+
             panic!("No error, just resetting device");
         }
     

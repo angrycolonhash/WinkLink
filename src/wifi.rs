@@ -59,7 +59,7 @@ impl WinkLinkWifiInfo {
                 display
             ).unwrap();
             
-        std::thread::sleep(Duration::from_millis(3000)); // Pause before animation starts
+        std::thread::sleep(Duration::from_millis(500)); // Pause before animation starts
         
         // Now animate the movement
         for frame in 1..=total_frames {
@@ -90,7 +90,7 @@ impl WinkLinkWifiInfo {
         }
         
         // Draw blue header bar using Rectangle primitive for faster rendering
-        let bar_height = 35;
+        let bar_height = 38;
         
         use embedded_graphics::{
             primitives::{Rectangle, PrimitiveStyleBuilder},
@@ -432,9 +432,7 @@ impl WinkLinkWifiInfo {
         };
     
         println!("Credentials received: {:?}", creds);
-        wifi.stop();
-    
-
+        wifi.stop().unwrap_or_fatal();
         /* --------------------------------------------------------------------------------- */
         
         // Validate credentials before connecting
@@ -455,7 +453,7 @@ impl WinkLinkWifiInfo {
         
         // Debug log the credentials
         println!("Attempting to connect with SSID: '{}', Password length: {}", 
-                 creds.ssid, creds.password.len());
+                    creds.ssid, creds.password.len());
         
         // Safely convert to HString with error handling
         let ssid_hstr = match HString::<32>::from_str(&creds.ssid) {
