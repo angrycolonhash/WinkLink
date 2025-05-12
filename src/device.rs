@@ -59,54 +59,59 @@ impl WinkLinkDeviceInfo {
         };
     
         if is_setup == false {
-            let display = st7789.display();
-            display.clear(Rgb565::BLACK).unwrap();
+            {
+                let display = st7789.display();
+                display.clear(Rgb565::BLACK).unwrap();
 
-            u8g2_fonts::FontRenderer::new::<u8g2_font_helvB14_te>()
-                .render_aligned(
-                    "Welcome to your new",
-                    Point::new(display.bounding_box().center().x, 53),
-                    VerticalPosition::Center,
-                    HorizontalAlignment::Center,
-                    FontColor::Transparent(Rgb565::WHITE),
-                    display
-                ).unwrap();
-            std::thread::sleep(Duration::from_millis(500));
-            u8g2_fonts::FontRenderer::new::<u8g2_font_helvB24_te>()
-                .render_aligned(
-                    "WinkLink",
-                    Point::new(display.bounding_box().center().x, display.bounding_box().center().y),
-                    VerticalPosition::Center,
-                    HorizontalAlignment::Center,
-                    FontColor::Transparent(Rgb565::WHITE),
-                    display
-                ).unwrap();
-            
-            std::thread::sleep(Duration::from_millis(3000));
-            display.clear(Rgb565::BLACK).unwrap();
+                u8g2_fonts::FontRenderer::new::<u8g2_font_helvB14_te>()
+                    .render_aligned(
+                        "Welcome to your new",
+                        Point::new(display.bounding_box().center().x, 53),
+                        VerticalPosition::Center,
+                        HorizontalAlignment::Center,
+                        FontColor::Transparent(Rgb565::WHITE),
+                        display
+                    ).unwrap();
+                std::thread::sleep(Duration::from_millis(500));
+                u8g2_fonts::FontRenderer::new::<u8g2_font_helvB24_te>()
+                    .render_aligned(
+                        "WinkLink",
+                        Point::new(display.bounding_box().center().x, display.bounding_box().center().y),
+                        VerticalPosition::Center,
+                        HorizontalAlignment::Center,
+                        FontColor::Transparent(Rgb565::WHITE),
+                        display
+                    ).unwrap();
+                
+                std::thread::sleep(Duration::from_millis(3000));
+                display.clear(Rgb565::BLACK).unwrap();
 
-            u8g2_fonts::FontRenderer::new::<u8g2_font_helvB24_te>()
-                .render_aligned(
-                    "Step 1",
-                    Point::new(display.bounding_box().center().x, 40),
-                    VerticalPosition::Top,
-                    HorizontalAlignment::Center,
-                    FontColor::Transparent(Rgb565::WHITE),
-                    display
-                ).unwrap();
-            u8g2_fonts::FontRenderer::new::<u8g2_font_helvB14_te>()
-                .render_aligned(
-                    "Connect to Wifi",
-                    Point::new(display.bounding_box().center().x, display.bounding_box().center().y),
-                    VerticalPosition::Center,
-                    HorizontalAlignment::Center,
-                    FontColor::Transparent(Rgb565::WHITE),
-                    display
-                ).unwrap();
-            
+                u8g2_fonts::FontRenderer::new::<u8g2_font_helvB24_te>()
+                    .render_aligned(
+                        "Step 1",
+                        Point::new(display.bounding_box().center().x, 40),
+                        VerticalPosition::Top,
+                        HorizontalAlignment::Center,
+                        FontColor::Transparent(Rgb565::WHITE),
+                        display
+                    ).unwrap();
+                u8g2_fonts::FontRenderer::new::<u8g2_font_helvB14_te>()
+                    .render_aligned(
+                        "Connect to Wifi",
+                        Point::new(display.bounding_box().center().x, display.bounding_box().center().y),
+                        VerticalPosition::Center,
+                        HorizontalAlignment::Center,
+                        FontColor::Transparent(Rgb565::WHITE),
+                        display
+                    ).unwrap();
+                    std::thread::sleep(Duration::from_millis(3000));
+
+            }
+
             wifi::WinkLinkWifiInfo::provision(st7789, wifi_pins, sysloop, nvs).unwrap_or_fatal();            
             
-            display.clear(Rgb565::BLACK);
+            let display = st7789.display();
+            display.clear(Rgb565::BLACK).unwrap();
             
             u8g2_fonts::FontRenderer::new::<u8g2_font_helvB14_te>()
                 .render_aligned(
